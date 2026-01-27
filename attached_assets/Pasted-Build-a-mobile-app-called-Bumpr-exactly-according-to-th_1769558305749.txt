@@ -1,0 +1,53 @@
+Build a mobile app called Bumpr exactly according to the whitepaper provided. Implement the entire app, including all backend, frontend, AI, AR, and UX components. Do not simplify, remove, or delay any features. Include everything described in the whitepaper: IRL Context Engine, AI-assisted social confidence, reputation system, AR interface, Nearby Mode, AR Moments, social handshake flows, toggles, and monetization features.
+
+Core Systems to Implement:
+
+IRL Context Engine – Inputs: location, movement, time/environmental signals, user interests, historical behavior, short-form local content, verified in-person interactions, reputation signals, venue/event metadata. Outputs: ranked nearby people, contextual summaries of spaces, local relevance signals, AR content prioritization, trust/reputation weighting, interaction prompts. Implement real-time AI processing for context updates.
+
+Reputation System – Clique Reputation based on verified proximity, consistent positive feedback, diversity of interaction contexts, rater credibility, behavioral stability. Reputation affects visibility only.
+
+AI-Assisted Social Confidence – Provide private conversation prompts, shared context indicators, and interaction confidence signals for all users.
+
+AR Interface –
+   - Nearby Mode: overlay nearby people as contextual nodes, use distance bands, provide AI-generated space summaries, floating content tied to location.
+   - AR Moments: 5–15 second short-form videos anchored to location/time, visible only in proximity, ranked locally by watch completion, local engagement, poster reputation, and velocity.
+
+Social Flow / Handshakes – Users must mutually consent to unlock profiles. Initial view: fully anonymous public info (interests, etc.). Handshake unlocks full profile. Toggle modes: “open to talk” or “busy.”
+
+UX & UI Design –
+
+No global feeds, follower counts, or endless scrolling.
+
+Designed for dense, transitional social environments (campuses, events, public spaces).
+
+User flows for Nearby Mode, AR Moments, reputation interactions, and handshakes.
+
+Color scheme & style: modern, minimal, non-AI-looking. Palette: muted primaries, soft gradients, subtle shadows. Status colors: green = open, gray = busy, blue = AR overlays. Typography: clean, legible sans-serif fonts. Icons: minimal, intuitive. AR overlays: natural, spatial, non-intrusive.
+
+Backend & Architecture –
+
+Mobile-first architecture for iOS and Android.
+
+Real-time updates for location, context, reputation, and interactions.
+
+Databases for users, AR Moments, reputations, venue metadata.
+
+Scalable APIs for Nearby Mode, AR Moments, handshakes, and reputation scoring.
+
+AI model pipelines for context engine and AR prioritization.
+
+Monetization & Integrations – Sponsored AR Moments, venue partnerships, event integrations, premium visibility tiers.
+
+Implementation Requirements:
+
+Implement all features fully; the app must be functional and interactive.
+
+Include AR rendering, AI inference, and real-time updates.
+
+Include fully designed UI/UX with color palette, typography, icons, and animations.
+
+Include all flows for Nearby Mode, AR Moments, reputation, handshakes, and user toggles.
+
+Include example datasets to test AI context, AR overlays, reputation calculations, and social flows.
+
+Build the complete app exactly as described — fully functional, interactive, and deployable — including all AI, AR, backend, frontend, and design components.
