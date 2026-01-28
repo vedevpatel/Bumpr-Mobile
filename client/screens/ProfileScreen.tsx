@@ -115,6 +115,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     navigation.navigate("Help");
   };
 
+  const handleConnectionsPress = () => {
+    navigation.navigate("Handshake");
+  };
+
   const handleChangeAvatar = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
@@ -389,6 +393,19 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             thumbColor={locationSharing ? theme.primary : theme.textSecondary}
           />
         </View>
+
+        <View style={[styles.divider, { backgroundColor: theme.border }]} />
+
+        <Pressable
+          style={({ pressed }) => [styles.settingRow, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={handleConnectionsPress}
+        >
+          <View style={styles.settingInfo}>
+            <Feather name="users" size={20} color={theme.textSecondary} />
+            <ThemedText type="body">Connections</ThemedText>
+          </View>
+          <Feather name="chevron-right" size={20} color={theme.textSecondary} />
+        </Pressable>
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
