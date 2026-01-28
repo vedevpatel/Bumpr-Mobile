@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
+import { storage } from "./storage";
 
 interface VenueCategory {
   name: string;
@@ -158,6 +159,7 @@ function generateFallbackVenues(lat: number, lng: number): any[] {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ============= VENUE ROUTES =============
   app.get("/api/venues", async (req, res) => {
     const lat = parseFloat(req.query.lat as string) || 0;
     const lng = parseFloat(req.query.lng as string) || 0;
@@ -171,7 +173,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get space summary for location
   app.get("/api/space-summary", (req, res) => {
     const city = (req.query.city as string) || "Your Area";
 
@@ -188,27 +189,359 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(summary);
   });
 
-  // Send handshake
-  app.post("/api/handshake", (req, res) => {
-    const { toUserId } = req.body;
-    
-    if (!toUserId) {
-      return res.status(400).json({ error: "Missing toUserId" });
-    }
+  // ============= USER & PROFILE ROUTES =============
+  app.post("/api/users", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password required" });
+      }
 
-    res.json({
-      success: true,
-      message: "Handshake sent successfully",
-      handshakeId: `hs-${Date.now()}`,
-    });
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(409).json({ error: "Username already exists" });
+      }
+
+      const user = await storage.createUser({ username, password });
+      res.status(201).json({ id: user.id, username: user.username });
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
   });
 
-  // Health check
+  app.post("/api/profiles", async (req, res) => {
+    try {
+      const profile = await storage.createProfile(req.body);
+      res.status(201).json(profile);
+    } catch (error) {
+      console.error("Error creating profile:", error);
+      res.status(500).json({ error: "Failed to create profile" });
+    }
+  });
+
+  app.get("/api/profiles/:userId", async (req, res) => {
+    try {
+      const profile = await storage.getProfile(req.params.userId);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+      res.json(profile);
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
+  app.patch("/api/profiles/:userId", async (req, res) => {
+    try {
+      const profile = await storage.updateProfile(req.params.userId, req.body);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+      res.json(profile);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  app.post("/api/profiles/:userId/location", async (req, res) => {
+    try {
+      const { lat, lng } = req.body;
+      if (typeof lat !== "number" || typeof lng !== "number") {
+        return res.status(400).json({ error: "Invalid coordinates" });
+      }
+      await storage.updateLocation(req.params.userId, lat, lng);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating location:", error);
+      res.status(500).json({ error: "Failed to update location" });
+    }
+  });
+
+  app.get("/api/profiles/nearby", async (req, res) => {
+    try {
+      const lat = parseFloat(req.query.lat as string);
+      const lng = parseFloat(req.query.lng as string);
+      const radius = parseFloat(req.query.radius as string) || 500;
+
+      if (isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({ error: "Invalid coordinates" });
+      }
+
+      const profiles = await storage.getNearbyProfiles(lat, lng, radius);
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching nearby profiles:", error);
+      res.status(500).json({ error: "Failed to fetch nearby profiles" });
+    }
+  });
+
+  // ============= HANDSHAKE ROUTES =============
+  app.post("/api/handshakes", async (req, res) => {
+    try {
+      const { senderId, receiverId, senderLat, senderLng, message } = req.body;
+
+      if (!senderId || !receiverId || typeof senderLat !== "number" || typeof senderLng !== "number") {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const existing = await storage.checkExistingHandshake(senderId, receiverId);
+      if (existing) {
+        if (existing.status === "pending") {
+          return res.status(409).json({ error: "Handshake already pending", handshake: existing });
+        }
+        if (existing.status === "accepted") {
+          return res.status(409).json({ error: "Already connected", handshake: existing });
+        }
+      }
+
+      const handshake = await storage.createHandshake({
+        senderId,
+        receiverId,
+        senderLat,
+        senderLng,
+        message,
+      });
+
+      res.status(201).json(handshake);
+    } catch (error) {
+      console.error("Error creating handshake:", error);
+      res.status(500).json({ error: "Failed to send handshake" });
+    }
+  });
+
+  app.get("/api/handshakes/pending/:userId", async (req, res) => {
+    try {
+      const handshakes = await storage.getPendingHandshakesForUser(req.params.userId);
+      
+      const enriched = await Promise.all(
+        handshakes.map(async (h) => {
+          const senderProfile = await storage.getProfile(h.senderId);
+          return { ...h, senderProfile };
+        })
+      );
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("Error fetching pending handshakes:", error);
+      res.status(500).json({ error: "Failed to fetch pending handshakes" });
+    }
+  });
+
+  app.get("/api/handshakes/sent/:userId", async (req, res) => {
+    try {
+      const handshakes = await storage.getSentHandshakes(req.params.userId);
+      
+      const enriched = await Promise.all(
+        handshakes.map(async (h) => {
+          const receiverProfile = await storage.getProfile(h.receiverId);
+          return { ...h, receiverProfile };
+        })
+      );
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("Error fetching sent handshakes:", error);
+      res.status(500).json({ error: "Failed to fetch sent handshakes" });
+    }
+  });
+
+  app.get("/api/handshakes/connections/:userId", async (req, res) => {
+    try {
+      const handshakes = await storage.getAcceptedHandshakes(req.params.userId);
+      
+      const enriched = await Promise.all(
+        handshakes.map(async (h) => {
+          const otherUserId = h.senderId === req.params.userId ? h.receiverId : h.senderId;
+          const profile = await storage.getProfile(otherUserId);
+          return { ...h, connectedProfile: profile };
+        })
+      );
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("Error fetching connections:", error);
+      res.status(500).json({ error: "Failed to fetch connections" });
+    }
+  });
+
+  app.post("/api/handshakes/:id/respond", async (req, res) => {
+    try {
+      const { response, receiverLat, receiverLng } = req.body;
+
+      if (!response || !["accepted", "declined"].includes(response)) {
+        return res.status(400).json({ error: "Invalid response" });
+      }
+
+      const handshake = await storage.respondToHandshake(
+        req.params.id,
+        response,
+        receiverLat,
+        receiverLng
+      );
+
+      if (!handshake) {
+        return res.status(404).json({ error: "Handshake not found" });
+      }
+
+      res.json(handshake);
+    } catch (error) {
+      console.error("Error responding to handshake:", error);
+      res.status(500).json({ error: "Failed to respond to handshake" });
+    }
+  });
+
+  // ============= MOMENTS ROUTES =============
+  app.post("/api/moments", async (req, res) => {
+    try {
+      const { userId, videoUrl, thumbnailUrl, caption, locationLat, locationLng, locationName, durationSeconds, expiresAt } = req.body;
+
+      if (!userId || typeof locationLat !== "number" || typeof locationLng !== "number") {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const moment = await storage.createMoment({
+        userId,
+        videoUrl,
+        thumbnailUrl,
+        caption,
+        locationLat,
+        locationLng,
+        locationName,
+        durationSeconds: durationSeconds || 10,
+        expiresAt: new Date(expiresAt || Date.now() + 24 * 60 * 60 * 1000),
+      });
+
+      res.status(201).json(moment);
+    } catch (error) {
+      console.error("Error creating moment:", error);
+      res.status(500).json({ error: "Failed to create moment" });
+    }
+  });
+
+  app.get("/api/moments/nearby", async (req, res) => {
+    try {
+      const lat = parseFloat(req.query.lat as string);
+      const lng = parseFloat(req.query.lng as string);
+      const radius = parseFloat(req.query.radius as string) || 500;
+
+      if (isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({ error: "Invalid coordinates" });
+      }
+
+      await storage.deactivateExpiredMoments();
+      const moments = await storage.getNearbyMoments(lat, lng, radius);
+
+      const enriched = await Promise.all(
+        moments.map(async (m) => {
+          const profile = await storage.getProfile(m.userId);
+          return { ...m, userProfile: profile };
+        })
+      );
+
+      res.json(enriched);
+    } catch (error) {
+      console.error("Error fetching nearby moments:", error);
+      res.status(500).json({ error: "Failed to fetch nearby moments" });
+    }
+  });
+
+  app.get("/api/moments/user/:userId", async (req, res) => {
+    try {
+      const moments = await storage.getUserMoments(req.params.userId);
+      res.json(moments);
+    } catch (error) {
+      console.error("Error fetching user moments:", error);
+      res.status(500).json({ error: "Failed to fetch user moments" });
+    }
+  });
+
+  app.get("/api/moments/:id", async (req, res) => {
+    try {
+      const moment = await storage.getMoment(req.params.id);
+      if (!moment) {
+        return res.status(404).json({ error: "Moment not found" });
+      }
+
+      const profile = await storage.getProfile(moment.userId);
+      res.json({ ...moment, userProfile: profile });
+    } catch (error) {
+      console.error("Error fetching moment:", error);
+      res.status(500).json({ error: "Failed to fetch moment" });
+    }
+  });
+
+  app.post("/api/moments/:id/view", async (req, res) => {
+    try {
+      const { viewerId } = req.body;
+      if (!viewerId) {
+        return res.status(400).json({ error: "Viewer ID required" });
+      }
+
+      await storage.viewMoment(req.params.id, viewerId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error recording view:", error);
+      res.status(500).json({ error: "Failed to record view" });
+    }
+  });
+
+  // ============= REPUTATION ROUTES =============
+  app.get("/api/reputation/:userId", async (req, res) => {
+    try {
+      const profile = await storage.getProfile(req.params.userId);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+
+      const history = await storage.getReputationHistory(req.params.userId, 20);
+
+      res.json({
+        score: profile.cliqueScore,
+        totalHandshakes: profile.totalHandshakes,
+        totalMoments: profile.totalMoments,
+        history,
+      });
+    } catch (error) {
+      console.error("Error fetching reputation:", error);
+      res.status(500).json({ error: "Failed to fetch reputation" });
+    }
+  });
+
+  // ============= PUSH TOKEN ROUTES =============
+  app.post("/api/push-tokens", async (req, res) => {
+    try {
+      const { userId, token, platform } = req.body;
+      if (!userId || !token || !platform) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const saved = await storage.savePushToken({ userId, token, platform });
+      res.status(201).json(saved);
+    } catch (error) {
+      console.error("Error saving push token:", error);
+      res.status(500).json({ error: "Failed to save push token" });
+    }
+  });
+
+  app.delete("/api/push-tokens/:token", async (req, res) => {
+    try {
+      await storage.deletePushToken(req.params.token);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting push token:", error);
+      res.status(500).json({ error: "Failed to delete push token" });
+    }
+  });
+
+  // ============= HEALTH CHECK =============
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   const httpServer = createServer(app);
-
   return httpServer;
 }
