@@ -128,7 +128,7 @@ export default function MapScreen({ navigation }: MapScreenProps) {
             title="Enable Location"
             description="Bumpr uses your location to show nearby people and AR Moments. Your exact location is never shared."
           />
-          <View style={styles.buttonContainer}>
+          <View style={styles.buttonContainerCentered}>
             {permission.status === "denied" && !permission.canAskAgain ? (
               Platform.OS !== "web" ? (
                 <Button
@@ -149,7 +149,7 @@ export default function MapScreen({ navigation }: MapScreenProps) {
               )
             ) : (
               <Button onPress={requestPermission}>
-                Enable Location
+                Allow Location
               </Button>
             )}
           </View>
@@ -232,6 +232,10 @@ const styles = StyleSheet.create({
   buttonContainer: {
     marginTop: Spacing.xl,
     width: "100%",
+    alignItems: "center",
+  },
+  buttonContainerCentered: {
+    marginTop: Spacing.lg,
     alignItems: "center",
   },
   topBar: {
