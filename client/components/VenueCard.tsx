@@ -101,7 +101,12 @@ export function VenueCard({ venue, onPress }: VenueCardProps) {
         </ThemedText>
 
         <View style={styles.footer}>
-          <View />
+          <View style={[styles.activeUsers, { backgroundColor: `${theme.secondary}15` }]}>
+            <View style={[styles.activeDot, { backgroundColor: venue.activeUsers > 0 ? theme.secondary : theme.textSecondary }]} />
+            <ThemedText type="small" style={{ color: venue.activeUsers > 0 ? theme.secondary : theme.textSecondary, fontWeight: "500" }}>
+              {venue.activeUsers} active
+            </ThemedText>
+          </View>
           <Feather name="chevron-right" size={20} color={theme.textSecondary} />
         </View>
       </View>

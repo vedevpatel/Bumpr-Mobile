@@ -130,9 +130,13 @@ export default function ViewMomentScreen({ navigation, route }: ViewMomentScreen
 
       <Animated.View
         entering={FadeIn.duration(300)}
-        style={[styles.topBar, { paddingTop: insets.top + Spacing.md }]}
+        style={[styles.topBar, { paddingTop: insets.top + Spacing.md, zIndex: 100 }]}
       >
-        <Pressable onPress={handleClose} style={styles.closeButton}>
+        <Pressable 
+          onPress={handleClose} 
+          style={styles.closeButton}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+        >
           <Feather name="x" size={24} color="#FFF" />
         </Pressable>
 
@@ -184,7 +188,7 @@ export default function ViewMomentScreen({ navigation, route }: ViewMomentScreen
       </Animated.View>
 
       {hasVideo ? (
-        <Pressable style={styles.playPauseOverlay} onPress={handlePlayPause}>
+        <Pressable style={[styles.playPauseOverlay, { zIndex: 50 }]} onPress={handlePlayPause}>
           {!isPlaying ? (
             <View style={styles.playIcon}>
               <Feather name="play" size={32} color="#FFF" />

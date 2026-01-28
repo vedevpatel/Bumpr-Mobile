@@ -18,12 +18,15 @@ export function useScreenOptions({
     headerTransparent: transparent,
     headerBlurEffect: isDark ? "dark" : "light",
     headerTintColor: theme.text,
+    headerShadowVisible: false,
     headerStyle: {
-      backgroundColor: Platform.select({
-        ios: undefined,
-        android: theme.backgroundRoot,
-        web: theme.backgroundRoot,
-      }),
+      backgroundColor: transparent 
+        ? "transparent" 
+        : Platform.select({
+            ios: theme.backgroundRoot,
+            android: theme.backgroundRoot,
+            web: theme.backgroundRoot,
+          }),
     },
     gestureEnabled: true,
     gestureDirection: "horizontal",
