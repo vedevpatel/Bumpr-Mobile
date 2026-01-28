@@ -154,13 +154,11 @@ export default function ARScreen() {
         facing="back"
       />
 
-      <Pressable style={StyleSheet.absoluteFill} onPress={handleScreenTap} />
-
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.md }]}>
         <View style={[styles.badge, { backgroundColor: "rgba(0,0,0,0.6)" }]}>
           <Feather name="aperture" size={16} color="#FFF" />
           <ThemedText type="small" style={{ color: "#FFF" }}>
-            {faceDetected ? "Face Detected" : "Tap when pointing at a face"}
+            {faceDetected ? "Face Detected" : "Point at a face"}
           </ThemedText>
         </View>
       </View>
@@ -180,8 +178,8 @@ export default function ARScreen() {
             styles.profileOverlay,
             overlayAnimatedStyle,
             {
-              top: insets.top + 100,
-              left: Spacing.lg,
+              top: insets.top + 80,
+              right: Spacing.md,
             },
           ]}
         >
@@ -203,68 +201,68 @@ export default function ARScreen() {
           {showProfile ? (
             <Animated.View
               entering={FadeInDown.duration(300)}
-              style={[styles.expandedProfile, { backgroundColor: theme.backgroundDefault }]}
+              style={[styles.expandedProfile, { backgroundColor: "rgba(30,30,30,0.85)" }]}
             >
               <View style={styles.profileHeader}>
-                <View style={[styles.followButton, { backgroundColor: theme.text }]}>
-                  <ThemedText type="small" style={{ color: theme.backgroundDefault, fontWeight: "600" }}>
+                <View style={[styles.followButton, { backgroundColor: "#FFF" }]}>
+                  <ThemedText type="small" style={{ color: "#000", fontWeight: "600" }}>
                     Follow
                   </ThemedText>
                 </View>
                 <View style={styles.socialIcons}>
-                  <Feather name="instagram" size={18} color={theme.textSecondary} />
-                  <Feather name="linkedin" size={18} color={theme.textSecondary} />
+                  <Feather name="instagram" size={18} color="rgba(255,255,255,0.7)" />
+                  <Feather name="linkedin" size={18} color="rgba(255,255,255,0.7)" />
                 </View>
               </View>
 
               <View style={styles.userRow}>
-                <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                <ThemedText type="small" style={{ color: "rgba(255,255,255,0.7)" }}>
                   {HARDCODED_PROFILE.username}
                 </ThemedText>
                 <View style={styles.locationRow}>
-                  <Feather name="map-pin" size={12} color={theme.textSecondary} />
-                  <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                  <Feather name="map-pin" size={12} color="rgba(255,255,255,0.7)" />
+                  <ThemedText type="small" style={{ color: "rgba(255,255,255,0.7)" }}>
                     {HARDCODED_PROFILE.location}
                   </ThemedText>
                 </View>
               </View>
 
               <View style={styles.statsRow}>
-                <ThemedText type="body">
-                  <ThemedText type="body" style={{ fontWeight: "700" }}>
+                <ThemedText type="body" style={{ color: "#FFF" }}>
+                  <ThemedText type="body" style={{ fontWeight: "700", color: "#FFF" }}>
                     {HARDCODED_PROFILE.following}
                   </ThemedText>
                   {" Following"}
                 </ThemedText>
-                <ThemedText type="body">
-                  <ThemedText type="body" style={{ fontWeight: "700" }}>
+                <ThemedText type="body" style={{ color: "#FFF" }}>
+                  <ThemedText type="body" style={{ fontWeight: "700", color: "#FFF" }}>
                     {HARDCODED_PROFILE.followers}
                   </ThemedText>
                   {" Followers"}
                 </ThemedText>
               </View>
 
-              <ThemedText type="small" style={{ color: theme.textSecondary, marginTop: Spacing.md }}>
+              <ThemedText type="small" style={{ color: "rgba(255,255,255,0.7)", marginTop: Spacing.md }}>
                 {HARDCODED_PROFILE.bio}
               </ThemedText>
 
-              <ThemedText type="small" style={{ marginTop: Spacing.md, fontWeight: "600" }}>
+              <ThemedText type="small" style={{ marginTop: Spacing.md, fontWeight: "600", color: "#FFF" }}>
                 Here are some things about me:
               </ThemedText>
               {HARDCODED_PROFILE.aboutMe.map((item, index) => (
                 <View key={index} style={styles.bulletRow}>
-                  <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                  <ThemedText type="small" style={{ color: "rgba(255,255,255,0.7)" }}>
                     {"• " + item}
                   </ThemedText>
                 </View>
               ))}
 
-              <ThemedText type="small" style={{ marginTop: Spacing.md, fontWeight: "600" }}>
+              <ThemedText type="small" style={{ marginTop: Spacing.md, fontWeight: "600", color: "#FFF" }}>
                 AI Conversation starters:
               </ThemedText>
               {HARDCODED_PROFILE.conversationStarters.map((starter, index) => (
                 <View key={index} style={styles.bulletRow}>
-                  <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                  <ThemedText type="small" style={{ color: "rgba(255,255,255,0.7)" }}>
                     {"• " + starter}
                   </ThemedText>
                 </View>
@@ -274,7 +272,7 @@ export default function ARScreen() {
         </Animated.View>
       ) : null}
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 80 }]}>
         {faceDetected ? (
           <Pressable
             style={[styles.dismissButton, { backgroundColor: "rgba(0,0,0,0.7)" }]}
@@ -286,12 +284,15 @@ export default function ARScreen() {
             </ThemedText>
           </Pressable>
         ) : (
-          <View style={[styles.instructionCard, { backgroundColor: "rgba(0,0,0,0.7)" }]}>
-            <Feather name="info" size={16} color="#FFF" />
-            <ThemedText type="small" style={{ color: "#FFF", flex: 1 }}>
-              Point your camera at someone and tap to see their Bumpr profile
+          <Pressable
+            style={[styles.detectButton, { backgroundColor: theme.primary }]}
+            onPress={handleScreenTap}
+          >
+            <Feather name="aperture" size={24} color="#FFF" />
+            <ThemedText type="body" style={{ color: "#FFF", fontWeight: "600" }}>
+              Detect Face
             </ThemedText>
-          </View>
+          </Pressable>
         )}
       </View>
     </View>
@@ -333,7 +334,8 @@ const styles = StyleSheet.create({
   },
   profileOverlay: {
     position: "absolute",
-    maxWidth: 280,
+    width: SCREEN_WIDTH - Spacing.md * 2,
+    maxWidth: 340,
   },
   miniProfile: {
     flexDirection: "row",
@@ -360,7 +362,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     padding: Spacing.lg,
     borderRadius: BorderRadius.xl,
-    minWidth: 260,
+    width: "100%",
   },
   profileHeader: {
     flexDirection: "row",
@@ -434,6 +436,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: Spacing.sm,
     padding: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    alignSelf: "center",
+  },
+  detectButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing["3xl"],
     borderRadius: BorderRadius.full,
     alignSelf: "center",
   },
