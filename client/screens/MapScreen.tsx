@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, View, Platform, Linking } from "react-native";
+import { StyleSheet, View, Platform, Linking, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -10,7 +10,6 @@ import { Pressable } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { StatusToggle } from "@/components/StatusToggle";
-import { UserNode } from "@/components/UserNode";
 import { SpaceSummaryCard } from "@/components/SpaceSummaryCard";
 import { FAB } from "@/components/FAB";
 import { EmptyState } from "@/components/EmptyState";
@@ -18,8 +17,8 @@ import { Button } from "@/components/Button";
 import { MapViewWrapper } from "@/components/MapViewWrapper";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
-import { NEARBY_USERS, SPACE_SUMMARY, CURRENT_USER } from "@/data/mockData";
-import type { UserStatus, NearbyUser } from "@/types";
+import { storage } from "@/lib/storage";
+import type { UserStatus, SpaceSummary } from "@/types";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -34,21 +33,62 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   const mapRef = useRef<any>(null);
 
   const [permission, requestPermission] = Location.useForegroundPermissions();
-  const [userStatus, setUserStatus] = useState<UserStatus>(CURRENT_USER.status);
+  const [userStatus, setUserStatus] = useState<UserStatus>("open");
   const [showSummary, setShowSummary] = useState(true);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [nearbyUsers] = useState<NearbyUser[]>(NEARBY_USERS);
+  const [locationName, setLocationName] = useState<string>("Your Area");
+  const [spaceSummary, setSpaceSummary] = useState<SpaceSummary | null>(null);
 
   useEffect(() => {
-    if (permission?.granted && Platform.OS !== "web") {
-      Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      }).then(setLocation);
+    loadUserStatus();
+  }, []);
+
+  useEffect(() => {
+    if (permission?.granted) {
+      fetchLocation();
     }
   }, [permission?.granted]);
 
-  const handleUserNodePress = (user: NearbyUser) => {
-    navigation.navigate("UserProfile", { userId: user.id });
+  const loadUserStatus = async () => {
+    const user = await storage.getUser();
+    if (user) {
+      setUserStatus(user.status);
+    }
+  };
+
+  const fetchLocation = async () => {
+    try {
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      setLocation(loc);
+
+      const reverseGeocode = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+
+      if (reverseGeocode.length > 0) {
+        const place = reverseGeocode[0];
+        const name = place.city || place.subregion || place.region || "Your Area";
+        setLocationName(name);
+        
+        setSpaceSummary({
+          title: name,
+          description: `Explore what's happening near ${place.street || place.district || name}`,
+          activeCount: 0,
+          vibe: "Discovering...",
+          topInterests: [],
+        });
+      }
+    } catch (error) {
+      console.log("Location error:", error);
+    }
+  };
+
+  const handleStatusChange = async (status: UserStatus) => {
+    setUserStatus(status);
+    await storage.updateStatus(status);
   };
 
   const handleHandshakePress = () => {
@@ -65,34 +105,45 @@ export default function MapScreen({ navigation }: MapScreenProps) {
     );
   }
 
-  if (!permission.granted && Platform.OS !== "web") {
+  if (!permission.granted) {
     return (
-      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.permissionContainer}>
+      <ThemedView style={styles.container}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.permissionContainer,
+            { paddingTop: insets.top + Spacing["4xl"] },
+          ]}
+        >
           <EmptyState
             image={require("../../assets/images/onboarding-context.png")}
             title="Enable Location"
             description="Bumpr uses your location to show nearby people and AR Moments. Your exact location is never shared."
           />
           {permission.status === "denied" && !permission.canAskAgain ? (
-            <Button
-              onPress={async () => {
-                try {
-                  await Linking.openSettings();
-                } catch (error) {
-                  // openSettings not supported
-                }
-              }}
-              style={styles.permissionButton}
-            >
-              Open Settings
-            </Button>
+            Platform.OS !== "web" ? (
+              <Button
+                onPress={async () => {
+                  try {
+                    await Linking.openSettings();
+                  } catch (error) {
+                    // openSettings not supported
+                  }
+                }}
+                style={styles.permissionButton}
+              >
+                Open Settings
+              </Button>
+            ) : (
+              <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center" }}>
+                Please enable location in Expo Go to use this feature.
+              </ThemedText>
+            )
           ) : (
             <Button onPress={requestPermission} style={styles.permissionButton}>
               Enable Location
             </Button>
           )}
-        </View>
+        </ScrollView>
       </ThemedView>
     );
   }
@@ -117,44 +168,35 @@ export default function MapScreen({ navigation }: MapScreenProps) {
         style={[styles.topBar, { top: insets.top + Spacing.lg }]}
       >
         <View style={[styles.statusContainer, { backgroundColor: theme.backgroundDefault }, Shadows.card]}>
-          <StatusToggle status={userStatus} onToggle={setUserStatus} compact />
+          <StatusToggle status={userStatus} onToggle={handleStatusChange} compact />
         </View>
 
-        <Pressable
-          style={[styles.arButton, { backgroundColor: theme.backgroundDefault }, Shadows.card]}
-          onPress={() => {}}
-        >
-          <Feather name="layers" size={20} color={theme.primary} />
-        </Pressable>
+        <View style={[styles.locationBadge, { backgroundColor: theme.backgroundDefault }, Shadows.card]}>
+          <Feather name="map-pin" size={14} color={theme.primary} />
+          <ThemedText type="caption" style={{ color: theme.text, fontWeight: "500" }}>
+            {locationName}
+          </ThemedText>
+        </View>
       </Animated.View>
 
-      {nearbyUsers.length > 0 ? (
-        <Animated.View
-          entering={FadeInDown.delay(200).duration(400)}
-          style={[styles.usersContainer, { bottom: tabBarHeight + (showSummary ? 220 : 80) }]}
-        >
-          {nearbyUsers.slice(0, 4).map((user, index) => (
-            <Animated.View
-              key={user.id}
-              entering={FadeInDown.delay(300 + index * 100).duration(400).springify()}
-            >
-              <UserNode user={user} onPress={() => handleUserNodePress(user)} />
-            </Animated.View>
-          ))}
-        </Animated.View>
-      ) : (
-        <View style={[styles.emptyContainer, { bottom: tabBarHeight + 100 }]}>
-          <EmptyState
-            image={require("../../assets/images/empty-nearby.png")}
-            title="No one nearby"
-            description="Be the first to connect in this area"
-          />
+      <Animated.View
+        entering={FadeInDown.delay(200).duration(400)}
+        style={[styles.emptyStateContainer, { bottom: tabBarHeight + (showSummary && spaceSummary ? 220 : 100) }]}
+      >
+        <View style={[styles.emptyCard, { backgroundColor: theme.backgroundDefault }, Shadows.card]}>
+          <Feather name="users" size={32} color={theme.textSecondary} />
+          <ThemedText type="h4" style={{ marginTop: Spacing.md }}>
+            No one nearby yet
+          </ThemedText>
+          <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center" }}>
+            Be the first to connect in {locationName}
+          </ThemedText>
         </View>
-      )}
+      </Animated.View>
 
-      {showSummary && (
+      {showSummary && spaceSummary && (
         <View style={{ position: "absolute", bottom: tabBarHeight, left: 0, right: 0 }}>
-          <SpaceSummaryCard summary={SPACE_SUMMARY} onDismiss={() => setShowSummary(false)} />
+          <SpaceSummaryCard summary={spaceSummary} onDismiss={() => setShowSummary(false)} />
         </View>
       )}
 
@@ -173,7 +215,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   permissionContainer: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: Spacing["3xl"],
@@ -195,24 +237,22 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
   },
-  arButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  usersContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
+  locationBadge: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    paddingHorizontal: Spacing.lg,
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
   },
-  emptyContainer: {
+  emptyStateContainer: {
     position: "absolute",
     left: Spacing.lg,
     right: Spacing.lg,
+  },
+  emptyCard: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: "center",
   },
 });

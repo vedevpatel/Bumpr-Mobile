@@ -1,17 +1,18 @@
-import React, { useState } from "react";
-import { FlatList, View, StyleSheet, TextInput, RefreshControl } from "react-native";
+import React, { useState, useEffect } from "react";
+import { FlatList, View, StyleSheet, TextInput, RefreshControl, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
+import * as Location from "expo-location";
 
 import { ThemedText } from "@/components/ThemedText";
 import { VenueCard } from "@/components/VenueCard";
 import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
-import { VENUES } from "@/data/mockData";
+import { getApiUrl } from "@/lib/query-client";
 import type { Venue } from "@/types";
 
 export default function DiscoverScreen() {
@@ -20,17 +21,64 @@ export default function DiscoverScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [venues] = useState<Venue[]>(VENUES);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [locationName, setLocationName] = useState<string>("Your Area");
 
-  const handleRefresh = () => {
+  useEffect(() => {
+    fetchVenues();
+  }, []);
+
+  const fetchVenues = async () => {
+    try {
+      setLoading(true);
+      const { status } = await Location.getForegroundPermissionsAsync();
+      
+      if (status === "granted") {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+        });
+        
+        const reverseGeocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        
+        if (reverseGeocode.length > 0) {
+          const place = reverseGeocode[0];
+          const city = place.city || place.subregion || place.region || "Your Area";
+          setLocationName(city);
+          
+          const baseUrl = getApiUrl();
+          const url = new URL("/api/venues", baseUrl);
+          url.searchParams.set("lat", location.coords.latitude.toString());
+          url.searchParams.set("lng", location.coords.longitude.toString());
+          url.searchParams.set("city", city);
+          
+          const response = await fetch(url.toString());
+          if (response.ok) {
+            const data = await response.json();
+            setVenues(data);
+          }
+        }
+      }
+    } catch (error) {
+      console.log("Error fetching venues:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await fetchVenues();
+    setRefreshing(false);
   };
 
   const handleVenuePress = (venue: Venue) => {
-    // Handle venue selection
+    // TODO: Navigate to venue details
   };
 
   const filteredVenues = venues.filter((venue) =>
@@ -72,7 +120,15 @@ export default function DiscoverScreen() {
       </View>
 
       <View style={styles.stats}>
-        <ThemedText type="h3">Discover</ThemedText>
+        <View style={styles.titleRow}>
+          <ThemedText type="h3">Discover</ThemedText>
+          <View style={[styles.locationBadge, { backgroundColor: `${theme.primary}15` }]}>
+            <Feather name="map-pin" size={12} color={theme.primary} />
+            <ThemedText type="caption" style={{ color: theme.primary }}>
+              {locationName}
+            </ThemedText>
+          </View>
+        </View>
         <ThemedText type="caption" style={{ color: theme.textSecondary }}>
           {filteredVenues.length} places nearby
         </ThemedText>
@@ -80,12 +136,25 @@ export default function DiscoverScreen() {
     </View>
   );
 
-  const renderEmpty = () => (
-    <EmptyState
-      title="No venues found"
-      description={searchQuery ? "Try a different search term" : "No venues available in this area"}
-    />
-  );
+  const renderEmpty = () => {
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <ThemedText type="body" style={{ color: theme.textSecondary, marginTop: Spacing.md }}>
+            Finding places near you...
+          </ThemedText>
+        </View>
+      );
+    }
+
+    return (
+      <EmptyState
+        title="No venues found"
+        description={searchQuery ? "Try a different search term" : `No venues available in ${locationName} yet`}
+      />
+    );
+  };
 
   return (
     <FlatList
@@ -133,5 +202,24 @@ const styles = StyleSheet.create({
   },
   stats: {
     gap: Spacing.xs,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  locationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: Spacing["4xl"],
   },
 });

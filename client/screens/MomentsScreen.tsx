@@ -1,18 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FlatList, View, StyleSheet, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import Animated, { FadeInUp } from "react-native-reanimated";
+import * as Location from "expo-location";
 import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
-import { MomentCard } from "@/components/MomentCard";
 import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { AR_MOMENTS } from "@/data/mockData";
-import type { ARMoment } from "@/types";
 
 export default function MomentsScreen() {
   const { theme } = useTheme();
@@ -20,46 +18,66 @@ export default function MomentsScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [moments] = useState<ARMoment[]>(AR_MOMENTS);
+  const [locationName, setLocationName] = useState<string>("Your Area");
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchLocationName();
+  }, []);
+
+  const fetchLocationName = async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status === "granted") {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+        });
+        const reverseGeocode = await Location.reverseGeocodeAsync({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+        if (reverseGeocode.length > 0) {
+          const place = reverseGeocode[0];
+          setLocationName(place.city || place.subregion || place.region || "Your Area");
+        }
+      }
+    } catch (error) {
+      console.log("Location error:", error);
+    }
+  };
 
   const handleRefresh = () => {
     setRefreshing(true);
+    fetchLocationName();
     setTimeout(() => setRefreshing(false), 1000);
   };
 
-  const handleMomentPress = (moment: ARMoment) => {
-    // Handle moment playback
+  const handleCreateMoment = () => {
+    // TODO: Open camera to create moment
   };
-
-  const renderMoment = ({ item, index }: { item: ARMoment; index: number }) => (
-    <Animated.View entering={FadeInUp.delay(index * 100).duration(400)}>
-      <MomentCard moment={item} onPress={() => handleMomentPress(item)} />
-    </Animated.View>
-  );
 
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={[styles.locationBadge, { backgroundColor: `${theme.primary}15` }]}>
         <Feather name="map-pin" size={14} color={theme.primary} />
         <ThemedText type="small" style={{ color: theme.primary, fontWeight: "500" }}>
-          Downtown SF
+          {locationName}
         </ThemedText>
       </View>
-      <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-        {moments.length} moments nearby
-      </ThemedText>
     </View>
   );
 
   const renderEmpty = () => (
-    <EmptyState
-      image={require("../../assets/images/empty-moments.png")}
-      title="No moments here yet"
-      description="Be the first to share what's happening in this area"
-      actionLabel="Create Moment"
-      onAction={() => {}}
-    />
+    <View style={styles.emptyContainer}>
+      <EmptyState
+        image={require("../../assets/images/empty-moments.png")}
+        title="No moments here yet"
+        description={`Be the first to share what's happening in ${locationName}`}
+      />
+      <Button onPress={handleCreateMoment} style={styles.createButton}>
+        Create Moment
+      </Button>
+    </View>
   );
 
   return (
@@ -72,10 +90,10 @@ export default function MomentsScreen() {
         flexGrow: 1,
       }}
       scrollIndicatorInsets={{ bottom: insets.bottom }}
-      data={moments}
-      keyExtractor={(item) => item.id}
-      renderItem={renderMoment}
-      ListHeaderComponent={moments.length > 0 ? renderHeader : null}
+      data={[]}
+      keyExtractor={(item: any) => item.id}
+      renderItem={() => null}
+      ListHeaderComponent={renderHeader}
       ListEmptyComponent={renderEmpty}
       refreshControl={
         <RefreshControl
@@ -91,9 +109,6 @@ export default function MomentsScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
     marginBottom: Spacing.xl,
   },
   locationBadge: {
@@ -103,5 +118,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
+    alignSelf: "flex-start",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  createButton: {
+    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing["3xl"],
   },
 });

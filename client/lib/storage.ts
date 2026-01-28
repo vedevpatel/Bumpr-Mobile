@@ -1,26 +1,34 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import type { User, UserStatus, NearbyUser, ARMoment, HandshakeRequest, Interest } from "@/types";
-import { CURRENT_USER, NEARBY_USERS, AR_MOMENTS, HANDSHAKE_REQUESTS, INTERESTS } from "@/data/mockData";
+import type { User, UserStatus, Interest } from "@/types";
 
 const STORAGE_KEYS = {
   USER: "@bumpr/user",
-  STATUS: "@bumpr/status",
-  INTERESTS: "@bumpr/interests",
-  HANDSHAKES: "@bumpr/handshakes",
-  CONNECTIONS: "@bumpr/connections",
   ONBOARDING_COMPLETE: "@bumpr/onboarding_complete",
+  PRIVACY_SETTINGS: "@bumpr/privacy_settings",
 } as const;
 
+const DEFAULT_USER: User = {
+  id: "current-user",
+  displayName: "You",
+  avatarPreset: 1,
+  status: "open",
+  interests: [],
+  reputation: 50,
+  isVerified: false,
+  bio: "",
+};
+
 export const storage = {
-  async getUser(): Promise<User | null> {
+  async getUser(): Promise<User> {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.USER);
       if (data) {
         return JSON.parse(data);
       }
-      return CURRENT_USER;
+      await this.saveUser(DEFAULT_USER);
+      return DEFAULT_USER;
     } catch {
-      return CURRENT_USER;
+      return DEFAULT_USER;
     }
   },
 
@@ -35,104 +43,40 @@ export const storage = {
   async updateStatus(status: UserStatus): Promise<void> {
     try {
       const user = await this.getUser();
-      if (user) {
-        user.status = status;
-        await this.saveUser(user);
-      }
+      user.status = status;
+      await this.saveUser(user);
     } catch (error) {
       console.error("Failed to update status:", error);
-    }
-  },
-
-  async getHandshakeRequests(): Promise<HandshakeRequest[]> {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.HANDSHAKES);
-      if (data) {
-        return JSON.parse(data);
-      }
-      return HANDSHAKE_REQUESTS;
-    } catch {
-      return HANDSHAKE_REQUESTS;
-    }
-  },
-
-  async saveHandshakeRequests(requests: HandshakeRequest[]): Promise<void> {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.HANDSHAKES, JSON.stringify(requests));
-    } catch (error) {
-      console.error("Failed to save handshake requests:", error);
-    }
-  },
-
-  async acceptHandshake(requestId: string): Promise<void> {
-    try {
-      const requests = await this.getHandshakeRequests();
-      const updated = requests.filter((r) => r.id !== requestId);
-      await this.saveHandshakeRequests(updated);
-
-      const connections = await this.getConnections();
-      const request = requests.find((r) => r.id === requestId);
-      if (request) {
-        connections.push(request.fromUserId);
-        await AsyncStorage.setItem(STORAGE_KEYS.CONNECTIONS, JSON.stringify(connections));
-      }
-    } catch (error) {
-      console.error("Failed to accept handshake:", error);
-    }
-  },
-
-  async declineHandshake(requestId: string): Promise<void> {
-    try {
-      const requests = await this.getHandshakeRequests();
-      const updated = requests.filter((r) => r.id !== requestId);
-      await this.saveHandshakeRequests(updated);
-    } catch (error) {
-      console.error("Failed to decline handshake:", error);
-    }
-  },
-
-  async getConnections(): Promise<string[]> {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.CONNECTIONS);
-      if (data) {
-        return JSON.parse(data);
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  },
-
-  async addConnection(userId: string): Promise<void> {
-    try {
-      const connections = await this.getConnections();
-      if (!connections.includes(userId)) {
-        connections.push(userId);
-        await AsyncStorage.setItem(STORAGE_KEYS.CONNECTIONS, JSON.stringify(connections));
-      }
-    } catch (error) {
-      console.error("Failed to add connection:", error);
-    }
-  },
-
-  async isConnected(userId: string): Promise<boolean> {
-    try {
-      const connections = await this.getConnections();
-      return connections.includes(userId);
-    } catch {
-      return false;
     }
   },
 
   async updateInterests(interests: Interest[]): Promise<void> {
     try {
       const user = await this.getUser();
-      if (user) {
-        user.interests = interests;
-        await this.saveUser(user);
-      }
+      user.interests = interests;
+      await this.saveUser(user);
     } catch (error) {
       console.error("Failed to update interests:", error);
+    }
+  },
+
+  async updateDisplayName(displayName: string): Promise<void> {
+    try {
+      const user = await this.getUser();
+      user.displayName = displayName;
+      await this.saveUser(user);
+    } catch (error) {
+      console.error("Failed to update display name:", error);
+    }
+  },
+
+  async updateBio(bio: string): Promise<void> {
+    try {
+      const user = await this.getUser();
+      user.bio = bio;
+      await this.saveUser(user);
+    } catch (error) {
+      console.error("Failed to update bio:", error);
     }
   },
 
@@ -150,6 +94,46 @@ export const storage = {
       await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETE, "true");
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
+    }
+  },
+
+  async getPrivacySettings(): Promise<{
+    showOnMap: boolean;
+    showDistance: boolean;
+    showInterests: boolean;
+    allowHandshakes: boolean;
+  }> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.PRIVACY_SETTINGS);
+      if (data) {
+        return JSON.parse(data);
+      }
+      return {
+        showOnMap: true,
+        showDistance: true,
+        showInterests: true,
+        allowHandshakes: true,
+      };
+    } catch {
+      return {
+        showOnMap: true,
+        showDistance: true,
+        showInterests: true,
+        allowHandshakes: true,
+      };
+    }
+  },
+
+  async savePrivacySettings(settings: {
+    showOnMap: boolean;
+    showDistance: boolean;
+    showInterests: boolean;
+    allowHandshakes: boolean;
+  }): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.PRIVACY_SETTINGS, JSON.stringify(settings));
+    } catch (error) {
+      console.error("Failed to save privacy settings:", error);
     }
   },
 

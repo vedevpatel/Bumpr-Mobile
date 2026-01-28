@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import { View, StyleSheet, Image, Pressable, ScrollView, Switch } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { View, StyleSheet, Image, Pressable, ScrollView, Switch, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -11,34 +12,107 @@ import { ThemedText } from "@/components/ThemedText";
 import { StatusToggle } from "@/components/StatusToggle";
 import { ReputationMeter } from "@/components/ReputationMeter";
 import { InterestChip } from "@/components/InterestChip";
-import { HandshakeCard } from "@/components/HandshakeCard";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
-import { CURRENT_USER, HANDSHAKE_REQUESTS, INTERESTS } from "@/data/mockData";
-import type { UserStatus, HandshakeRequest } from "@/types";
+import { storage } from "@/lib/storage";
+import { INTERESTS } from "@/data/mockData";
+import type { User, UserStatus, Interest } from "@/types";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
-export default function ProfileScreen() {
+interface ProfileScreenProps {
+  navigation: NativeStackNavigationProp<RootStackParamList>;
+}
+
+export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [user, setUser] = useState(CURRENT_USER);
-  const [pendingRequests, setPendingRequests] = useState<HandshakeRequest[]>(HANDSHAKE_REQUESTS);
+  const [user, setUser] = useState<User | null>(null);
+  const [isEditingInterests, setIsEditingInterests] = useState(false);
+  const [selectedInterests, setSelectedInterests] = useState<Interest[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [locationSharing, setLocationSharing] = useState(true);
 
-  const handleStatusChange = (status: UserStatus) => {
-    setUser({ ...user, status });
+  useFocusEffect(
+    useCallback(() => {
+      loadUser();
+    }, [])
+  );
+
+  const loadUser = async () => {
+    const userData = await storage.getUser();
+    if (userData) {
+      setUser(userData);
+      setSelectedInterests(userData.interests);
+    }
   };
 
-  const handleAcceptRequest = (requestId: string) => {
-    setPendingRequests((prev) => prev.filter((r) => r.id !== requestId));
+  const handleStatusChange = async (status: UserStatus) => {
+    if (user) {
+      const updatedUser = { ...user, status };
+      setUser(updatedUser);
+      await storage.saveUser(updatedUser);
+    }
   };
 
-  const handleDeclineRequest = (requestId: string) => {
-    setPendingRequests((prev) => prev.filter((r) => r.id !== requestId));
+  const handleInterestToggle = (interest: Interest) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedInterests((prev) => {
+      const exists = prev.some((i) => i.id === interest.id);
+      if (exists) {
+        return prev.filter((i) => i.id !== interest.id);
+      } else {
+        return [...prev, interest];
+      }
+    });
   };
+
+  const handleSaveInterests = async () => {
+    if (user) {
+      const updatedUser = { ...user, interests: selectedInterests };
+      setUser(updatedUser);
+      await storage.saveUser(updatedUser);
+      setIsEditingInterests(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const handlePrivacyPress = () => {
+    navigation.navigate("Privacy");
+  };
+
+  const handleHelpPress = () => {
+    navigation.navigate("Help");
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            await storage.clearAll();
+            // In a real app, this would navigate to login
+          },
+        },
+      ]
+    );
+  };
+
+  if (!user) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+        <ThemedText>Loading...</ThemedText>
+      </View>
+    );
+  }
 
   const avatarImage = user.avatarPreset === 1
     ? require("../../assets/images/avatar-preset-1.png")
@@ -87,40 +161,47 @@ export default function ProfileScreen() {
       >
         <View style={styles.sectionHeader}>
           <ThemedText type="h4">Your Interests</ThemedText>
-          <Pressable>
-            <Feather name="edit-2" size={18} color={theme.primary} />
-          </Pressable>
+          {isEditingInterests ? (
+            <Pressable onPress={handleSaveInterests}>
+              <ThemedText type="body" style={{ color: theme.primary, fontWeight: "600" }}>
+                Save
+              </ThemedText>
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => setIsEditingInterests(true)}>
+              <Feather name="edit-2" size={18} color={theme.primary} />
+            </Pressable>
+          )}
         </View>
-        <View style={styles.interestsGrid}>
-          {user.interests.map((interest) => (
-            <InterestChip key={interest.id} label={interest.name} isSelected />
-          ))}
-        </View>
+
+        {isEditingInterests ? (
+          <View style={styles.interestsGrid}>
+            {INTERESTS.map((interest) => (
+              <InterestChip
+                key={interest.id}
+                label={interest.name}
+                isSelected={selectedInterests.some((i) => i.id === interest.id)}
+                onPress={() => handleInterestToggle(interest)}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.interestsGrid}>
+            {user.interests.length > 0 ? (
+              user.interests.map((interest) => (
+                <InterestChip key={interest.id} label={interest.name} isSelected />
+              ))
+            ) : (
+              <ThemedText type="body" style={{ color: theme.textSecondary }}>
+                Tap edit to add your interests
+              </ThemedText>
+            )}
+          </View>
+        )}
       </Animated.View>
 
-      {pendingRequests.length > 0 && (
-        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
-          <View style={styles.sectionTitleRow}>
-            <ThemedText type="h4">Handshake Requests</ThemedText>
-            <View style={[styles.badge, { backgroundColor: theme.primary }]}>
-              <ThemedText type="caption" style={{ color: "#FFF", fontWeight: "600" }}>
-                {pendingRequests.length}
-              </ThemedText>
-            </View>
-          </View>
-          {pendingRequests.map((request) => (
-            <HandshakeCard
-              key={request.id}
-              request={request}
-              onAccept={() => handleAcceptRequest(request.id)}
-              onDecline={() => handleDeclineRequest(request.id)}
-            />
-          ))}
-        </Animated.View>
-      )}
-
       <Animated.View
-        entering={FadeInDown.delay(400).duration(400)}
+        entering={FadeInDown.delay(300).duration(400)}
         style={[styles.section, { backgroundColor: theme.backgroundDefault }, Shadows.card]}
       >
         <ThemedText type="h4" style={{ marginBottom: Spacing.md }}>
@@ -163,7 +244,10 @@ export default function ProfileScreen() {
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-        <Pressable style={styles.settingRow}>
+        <Pressable
+          style={({ pressed }) => [styles.settingRow, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={handlePrivacyPress}
+        >
           <View style={styles.settingInfo}>
             <Feather name="shield" size={20} color={theme.textSecondary} />
             <ThemedText type="body">Privacy</ThemedText>
@@ -173,7 +257,10 @@ export default function ProfileScreen() {
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
 
-        <Pressable style={styles.settingRow}>
+        <Pressable
+          style={({ pressed }) => [styles.settingRow, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={handleHelpPress}
+        >
           <View style={styles.settingInfo}>
             <Feather name="help-circle" size={20} color={theme.textSecondary} />
             <ThemedText type="body">Help & Support</ThemedText>
@@ -182,7 +269,10 @@ export default function ProfileScreen() {
         </Pressable>
       </Animated.View>
 
-      <Pressable style={styles.logoutButton}>
+      <Pressable
+        style={({ pressed }) => [styles.logoutButton, { opacity: pressed ? 0.6 : 1 }]}
+        onPress={handleLogout}
+      >
         <ThemedText type="body" style={{ color: theme.error }}>
           Log Out
         </ThemedText>
@@ -192,6 +282,11 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   profileHeader: {
     alignItems: "center",
     gap: Spacing.md,
@@ -227,17 +322,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: Spacing.md,
-  },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  badge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
   },
   interestsGrid: {
     flexDirection: "row",
