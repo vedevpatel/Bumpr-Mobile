@@ -294,7 +294,7 @@ export default function ARScreen() {
       {/* Dossier Card */}
       {detectedUser ? (
         <Animated.View style={[styles.dossierContainer, { bottom: insets.bottom + 100 }, dossierStyle]}>
-          <BlurView intensity={40} tint="dark" style={styles.dossierBlur}>
+          <BlurView intensity={25} tint="dark" style={styles.dossierBlur}>
             <View style={styles.dossierContent}>
               {/* Header with avatar and name */}
               <View style={styles.dossierHeader}>
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.15)",
   },
   dossierBlur: {
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.35)",
   },
   dossierContent: {
     padding: Spacing.lg,
