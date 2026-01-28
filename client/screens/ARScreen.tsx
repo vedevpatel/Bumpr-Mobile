@@ -1,19 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, Pressable, Platform, Image, Linking, Dimensions, Alert } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import Animated, { 
-  FadeIn, 
-  FadeOut, 
   useAnimatedStyle, 
   useSharedValue, 
   withTiming, 
-  withSequence,
   withDelay,
   Easing,
-  runOnJS,
-  interpolate
 } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -22,8 +17,6 @@ import { ThemedText } from "@/components/ThemedText";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -91,39 +84,35 @@ export default function ARScreen() {
 
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraReady, setCameraReady] = useState(false);
-  const [detecting, setDetecting] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [detectedUser, setDetectedUser] = useState<NearbyUser | null>(null);
   const [currentDemoIndex, setCurrentDemoIndex] = useState(0);
   const [researchPhase, setResearchPhase] = useState(0);
-  const detectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const redetectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const phaseIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const focusRingOpacity = useSharedValue(0);
   const researchTextOpacity = useSharedValue(0);
   const dossierOpacity = useSharedValue(0);
   const dossierTranslateY = useSharedValue(20);
+  const scanButtonOpacity = useSharedValue(1);
 
   useEffect(() => {
     return () => {
-      if (detectionTimeoutRef.current) clearTimeout(detectionTimeoutRef.current);
-      if (redetectTimeoutRef.current) clearTimeout(redetectTimeoutRef.current);
+      if (scanTimeoutRef.current) clearTimeout(scanTimeoutRef.current);
       if (phaseIntervalRef.current) clearInterval(phaseIntervalRef.current);
     };
   }, []);
 
-  useEffect(() => {
-    if (cameraReady && !detectedUser && !detecting) {
-      startDetection();
-    }
-  }, [cameraReady, detectedUser, detecting]);
-
-  const startDetection = () => {
-    setDetecting(true);
+  const handleScan = () => {
+    if (scanning || detectedUser) return;
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setScanning(true);
     setResearchPhase(0);
     
+    scanButtonOpacity.value = withTiming(0, { duration: 200 });
     focusRingOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
-    
     researchTextOpacity.value = withDelay(300, withTiming(1, { duration: 300 }));
     
     let phase = 0;
@@ -134,7 +123,7 @@ export default function ARScreen() {
     
     const delay = 2000 + Math.random() * 800;
     
-    detectionTimeoutRef.current = setTimeout(() => {
+    scanTimeoutRef.current = setTimeout(() => {
       if (phaseIntervalRef.current) clearInterval(phaseIntervalRef.current);
       
       const profile = DEMO_PROFILES[currentDemoIndex % DEMO_PROFILES.length];
@@ -147,7 +136,7 @@ export default function ARScreen() {
       
       setTimeout(() => {
         setDetectedUser(profile);
-        setDetecting(false);
+        setScanning(false);
         
         dossierOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
         dossierTranslateY.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
@@ -167,13 +156,8 @@ export default function ARScreen() {
     
     setTimeout(() => {
       setDetectedUser(null);
+      scanButtonOpacity.value = withTiming(1, { duration: 300 });
     }, 150);
-    
-    redetectTimeoutRef.current = setTimeout(() => {
-      if (cameraReady) {
-        startDetection();
-      }
-    }, 1500);
   };
 
   const handleSendHandshake = () => {
@@ -200,6 +184,10 @@ export default function ARScreen() {
   const dossierStyle = useAnimatedStyle(() => ({
     opacity: dossierOpacity.value,
     transform: [{ translateY: dossierTranslateY.value }],
+  }));
+
+  const scanButtonStyle = useAnimatedStyle(() => ({
+    opacity: scanButtonOpacity.value,
   }));
 
   if (!permission) {
@@ -262,28 +250,25 @@ export default function ARScreen() {
         onCameraReady={handleCameraReady}
       />
 
-      {/* Subtle vignette overlay */}
-      <View style={styles.vignetteOverlay} pointerEvents="none" />
-
       {/* Top status indicator */}
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.md }]}>
         <View style={styles.statusIndicator}>
-          <View style={[styles.statusDotLive, { backgroundColor: detecting ? "#00FF88" : detectedUser ? "#00FF88" : "#666" }]} />
+          <View style={[styles.statusDotLive, { backgroundColor: scanning ? "#00FF88" : detectedUser ? "#00FF88" : "#666" }]} />
           <ThemedText style={styles.statusText}>
-            {detecting ? "SCANNING" : detectedUser ? "LOCKED" : "STANDBY"}
+            {scanning ? "SCANNING" : detectedUser ? "LOCKED" : "READY"}
           </ThemedText>
         </View>
       </View>
 
       {/* Focus ring and research phase */}
-      {detecting ? (
+      {scanning ? (
         <View style={styles.scanOverlay} pointerEvents="none">
           <Animated.View style={[styles.focusRingContainer, focusRingStyle]}>
             <View style={styles.focusRing} />
-            <View style={[styles.focusCornerTL]} />
-            <View style={[styles.focusCornerTR]} />
-            <View style={[styles.focusCornerBL]} />
-            <View style={[styles.focusCornerBR]} />
+            <View style={styles.focusCornerTL} />
+            <View style={styles.focusCornerTR} />
+            <View style={styles.focusCornerBL} />
+            <View style={styles.focusCornerBR} />
           </Animated.View>
           
           <Animated.View style={[styles.researchContainer, researchTextStyle]}>
@@ -294,10 +279,22 @@ export default function ARScreen() {
         </View>
       ) : null}
 
+      {/* Scan Button - only show when not scanning and no profile detected */}
+      {!scanning && !detectedUser && cameraReady ? (
+        <Animated.View style={[styles.scanButtonContainer, { bottom: insets.bottom + 100 }, scanButtonStyle]}>
+          <Pressable style={styles.scanButton} onPress={handleScan}>
+            <View style={styles.scanButtonInner}>
+              <Feather name="aperture" size={28} color="#FFF" />
+            </View>
+            <ThemedText style={styles.scanButtonLabel}>SCAN</ThemedText>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
       {/* Dossier Card */}
       {detectedUser ? (
-        <Animated.View style={[styles.dossierContainer, dossierStyle]}>
-          <BlurView intensity={80} tint="dark" style={styles.dossierBlur}>
+        <Animated.View style={[styles.dossierContainer, { bottom: insets.bottom + 100 }, dossierStyle]}>
+          <BlurView intensity={40} tint="dark" style={styles.dossierBlur}>
             <View style={styles.dossierContent}>
               {/* Header with avatar and name */}
               <View style={styles.dossierHeader}>
@@ -411,12 +408,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  vignetteOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "transparent",
-    borderWidth: 60,
-    borderColor: "rgba(0,0,0,0.3)",
-  },
   topBar: {
     position: "absolute",
     top: 0,
@@ -432,7 +423,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 4,
@@ -519,9 +510,35 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
     letterSpacing: 0.5,
   },
+  scanButtonContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 20,
+  },
+  scanButton: {
+    alignItems: "center",
+    gap: 8,
+  },
+  scanButtonInner: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scanButtonLabel: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 11,
+    color: "rgba(255,255,255,0.7)",
+    letterSpacing: 2,
+  },
   dossierContainer: {
     position: "absolute",
-    bottom: 100,
     left: Spacing.lg,
     right: Spacing.lg,
     borderRadius: 12,
@@ -530,7 +547,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.15)",
   },
   dossierBlur: {
-    backgroundColor: "rgba(20,20,20,0.7)",
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   dossierContent: {
     padding: Spacing.lg,
