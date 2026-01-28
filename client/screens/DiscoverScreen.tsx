@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { FlatList, View, StyleSheet, TextInput, RefreshControl, ActivityIndicator } from "react-native";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { FlatList, View, StyleSheet, TextInput, RefreshControl, ActivityIndicator, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -26,6 +26,7 @@ export default function DiscoverScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locationName, setLocationName] = useState<string>("Your Area");
+  const searchInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     fetchVenues();
@@ -80,55 +81,21 @@ export default function DiscoverScreen() {
     venue.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text);
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery("");
+    searchInputRef.current?.focus();
+  }, []);
+
   const renderVenue = ({ item, index }: { item: Venue; index: number }) => (
     <Animated.View entering={FadeInUp.delay(index * 100).duration(400)}>
       <VenueCard venue={item} onPress={() => handleVenuePress(item)} />
     </Animated.View>
   );
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <View
-        style={[
-          styles.searchContainer,
-          { backgroundColor: theme.backgroundDefault },
-          Shadows.card,
-        ]}
-      >
-        <Feather name="search" size={18} color={theme.textSecondary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="Search venues, events..."
-          placeholderTextColor={theme.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery.length > 0 && (
-          <Feather
-            name="x"
-            size={18}
-            color={theme.textSecondary}
-            onPress={() => setSearchQuery("")}
-          />
-        )}
-      </View>
-
-      <View style={styles.stats}>
-        <View style={styles.titleRow}>
-          <ThemedText type="h3">Discover</ThemedText>
-          <View style={[styles.locationBadge, { backgroundColor: `${theme.primary}15` }]}>
-            <Feather name="map-pin" size={12} color={theme.primary} />
-            <ThemedText type="caption" style={{ color: theme.primary }}>
-              {locationName}
-            </ThemedText>
-          </View>
-        </View>
-        <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-          {filteredVenues.length} places nearby
-        </ThemedText>
-      </View>
-    </View>
-  );
 
   const renderEmpty = () => {
     if (loading) {
@@ -151,36 +118,84 @@ export default function DiscoverScreen() {
   };
 
   return (
-    <FlatList
-      style={{ flex: 1, backgroundColor: theme.backgroundRoot }}
-      contentContainerStyle={{
-        paddingTop: headerHeight + Spacing.xl,
-        paddingBottom: tabBarHeight + Spacing.xl,
-        paddingHorizontal: Spacing.lg,
-        flexGrow: 1,
-      }}
-      scrollIndicatorInsets={{ bottom: insets.bottom }}
-      data={filteredVenues}
-      keyExtractor={(item) => item.id}
-      renderItem={renderVenue}
-      ListHeaderComponent={renderHeader}
-      ListEmptyComponent={renderEmpty}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={theme.primary}
-        />
-      }
-      showsVerticalScrollIndicator={false}
-    />
+    <View style={{ flex: 1, backgroundColor: theme.backgroundRoot }}>
+      <View style={[styles.searchHeader, { paddingTop: headerHeight + Spacing.lg }]}>
+        <View
+          style={[
+            styles.searchContainer,
+            { backgroundColor: theme.backgroundDefault },
+            Shadows.card,
+          ]}
+        >
+          <Feather name="search" size={18} color={theme.textSecondary} />
+          <TextInput
+            ref={searchInputRef}
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Search venues, events..."
+            placeholderTextColor={theme.textSecondary}
+            value={searchQuery}
+            onChangeText={handleSearchChange}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            blurOnSubmit={false}
+          />
+          {searchQuery.length > 0 ? (
+            <Pressable onPress={handleClearSearch} hitSlop={10}>
+              <Feather name="x" size={18} color={theme.textSecondary} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+
+      <FlatList
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: Spacing.lg,
+          paddingBottom: tabBarHeight + Spacing.xl,
+          paddingHorizontal: Spacing.lg,
+          flexGrow: 1,
+        }}
+        scrollIndicatorInsets={{ bottom: insets.bottom }}
+        data={filteredVenues}
+        keyExtractor={(item) => item.id}
+        renderItem={renderVenue}
+        ListHeaderComponent={() => (
+          <View style={styles.stats}>
+            <View style={styles.titleRow}>
+              <ThemedText type="h3">Discover</ThemedText>
+              <View style={[styles.locationBadge, { backgroundColor: `${theme.primary}15` }]}>
+                <Feather name="map-pin" size={12} color={theme.primary} />
+                <ThemedText type="caption" style={{ color: theme.primary }}>
+                  {locationName}
+                </ThemedText>
+              </View>
+            </View>
+            <ThemedText type="caption" style={{ color: theme.textSecondary, marginBottom: Spacing.lg }}>
+              {filteredVenues.length} places nearby
+            </ThemedText>
+          </View>
+        )}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.primary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    gap: Spacing.xl,
-    marginBottom: Spacing.xl,
+  searchHeader: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
   },
   searchContainer: {
     flexDirection: "row",

@@ -31,6 +31,14 @@ export default function MainTabNavigator() {
       screenOptions={{
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.tabIconDefault,
+        headerStyle: {
+          backgroundColor: theme.backgroundRoot,
+        },
+        headerTintColor: theme.text,
+        headerShadowVisible: false,
+        sceneStyle: {
+          backgroundColor: theme.backgroundRoot,
+        },
         tabBarStyle: {
           position: "absolute",
           backgroundColor: Platform.select({
