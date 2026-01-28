@@ -2,13 +2,20 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { Platform, StyleSheet } from "react-native";
-import HomeStackNavigator from "@/navigation/HomeStackNavigator";
-import ProfileStackNavigator from "@/navigation/ProfileStackNavigator";
+import { Platform, StyleSheet, View } from "react-native";
+
+import MapScreen from "@/screens/MapScreen";
+import MomentsScreen from "@/screens/MomentsScreen";
+import DiscoverScreen from "@/screens/DiscoverScreen";
+import ProfileScreen from "@/screens/ProfileScreen";
+import { HeaderTitle } from "@/components/HeaderTitle";
 import { useTheme } from "@/hooks/useTheme";
+import { useScreenOptions } from "@/hooks/useScreenOptions";
 
 export type MainTabParamList = {
-  HomeTab: undefined;
+  MapTab: undefined;
+  MomentsTab: undefined;
+  DiscoverTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -16,18 +23,21 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
+  const screenOptions = useScreenOptions();
 
   return (
     <Tab.Navigator
-      initialRouteName="HomeTab"
+      initialRouteName="MapTab"
       screenOptions={{
-        tabBarActiveTintColor: theme.tabIconSelected,
+        ...screenOptions,
+        tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.tabIconDefault,
         tabBarStyle: {
           position: "absolute",
           backgroundColor: Platform.select({
             ios: "transparent",
             android: theme.backgroundRoot,
+            web: theme.backgroundRoot,
           }),
           borderTopWidth: 0,
           elevation: 0,
@@ -40,24 +50,51 @@ export default function MainTabNavigator() {
               style={StyleSheet.absoluteFill}
             />
           ) : null,
-        headerShown: false,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "500",
+        },
       }}
     >
       <Tab.Screen
-        name="HomeTab"
-        component={HomeStackNavigator}
+        name="MapTab"
+        component={MapScreen}
         options={{
-          title: "Home",
+          title: "Nearby",
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={size} color={color} />
+            <Feather name="map" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="MomentsTab"
+        component={MomentsScreen}
+        options={{
+          title: "Moments",
+          headerTitle: () => <HeaderTitle title="Moments" />,
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="play-circle" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="DiscoverTab"
+        component={DiscoverScreen}
+        options={{
+          title: "Discover",
+          headerTitle: () => <HeaderTitle title="Discover" />,
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="compass" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen
         name="ProfileTab"
-        component={ProfileStackNavigator}
+        component={ProfileScreen}
         options={{
           title: "Profile",
+          headerTitle: () => <HeaderTitle title="Profile" />,
           tabBarIcon: ({ color, size }) => (
             <Feather name="user" size={size} color={color} />
           ),
