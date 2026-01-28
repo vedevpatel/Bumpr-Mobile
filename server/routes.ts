@@ -75,19 +75,25 @@ async function fetchRealVenues(lat: number, lng: number): Promise<any[]> {
   ).join("\n");
 
   const overpassQuery = `
-    [out:json][timeout:10];
+    [out:json][timeout:5];
     (
       ${tagQueries}
     );
-    out body 20;
+    out body 15;
   `;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
 
   try {
     const response = await fetch("https://overpass-api.de/api/interpreter", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `data=${encodeURIComponent(overpassQuery)}`,
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error("Overpass API request failed");
@@ -131,9 +137,14 @@ async function fetchRealVenues(lat: number, lng: number): Promise<any[]> {
       }
     }
 
+    if (venues.length === 0) {
+      return generateFallbackVenues(lat, lng);
+    }
+
     return venues.sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
   } catch (error) {
-    console.log("Overpass API error, using fallback:", error);
+    clearTimeout(timeoutId);
+    console.log("Overpass API error, using fallback venues");
     return generateFallbackVenues(lat, lng);
   }
 }
