@@ -257,7 +257,7 @@ export default function ARScreen() {
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="front"
+        facing="back"
         onCameraReady={handleCameraReady}
       />
 
