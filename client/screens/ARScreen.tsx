@@ -3,17 +3,14 @@ import { View, StyleSheet, Pressable, Platform, Image, Linking, Dimensions, Aler
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withSpring, withRepeat, withSequence, withTiming, runOnJS } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withSpring, withRepeat, withSequence, withTiming, withDelay, runOnJS } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import * as Location from "expo-location";
 
 import { ThemedText } from "@/components/ThemedText";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
-import { getApiUrl } from "@/lib/query-client";
-import { storage } from "@/lib/storage";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -30,6 +27,40 @@ interface NearbyUser {
   interests?: string[];
 }
 
+// Demo profiles for face detection simulation
+const DEMO_PROFILES: NearbyUser[] = [
+  {
+    id: "demo-1",
+    name: "Alex Chen",
+    avatarUrl: undefined,
+    cliqueScore: 87,
+    distance: 3,
+    status: "open",
+    bio: "Tech enthusiast & coffee lover. Always up for interesting conversations!",
+    interests: ["Photography", "AI", "Hiking", "Coffee"],
+  },
+  {
+    id: "demo-2", 
+    name: "Jordan Rivera",
+    avatarUrl: undefined,
+    cliqueScore: 92,
+    distance: 5,
+    status: "open",
+    bio: "Creative director by day, musician by night. Let's collaborate!",
+    interests: ["Music", "Design", "Art", "Travel"],
+  },
+  {
+    id: "demo-3",
+    name: "Sam Taylor",
+    avatarUrl: undefined,
+    cliqueScore: 78,
+    distance: 8,
+    status: "open", 
+    bio: "Startup founder passionate about sustainability and innovation.",
+    interests: ["Startups", "Climate", "Running", "Books"],
+  },
+];
+
 export default function ARScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -37,103 +68,91 @@ export default function ARScreen() {
   const cameraRef = useRef<CameraView>(null);
 
   const [permission, requestPermission] = useCameraPermissions();
-  const [locationPermission, requestLocationPermission] = Location.useForegroundPermissions();
-  const [scanning, setScanning] = useState(false);
-  const [nearbyUsers, setNearbyUsers] = useState<NearbyUser[]>([]);
-  const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [detectedUser, setDetectedUser] = useState<NearbyUser | null>(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentDemoIndex, setCurrentDemoIndex] = useState(0);
+  const detectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const redetectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const overlayScale = useSharedValue(0);
   const overlayOpacity = useSharedValue(0);
   const scanPulse = useSharedValue(1);
-  const scanProgress = useSharedValue(0);
+  const focusRingScale = useSharedValue(0.8);
+  const focusRingOpacity = useSharedValue(0);
 
+  // Cleanup timeouts on unmount
   useEffect(() => {
-    loadCurrentUser();
+    return () => {
+      if (detectionTimeoutRef.current) clearTimeout(detectionTimeoutRef.current);
+      if (redetectTimeoutRef.current) clearTimeout(redetectTimeoutRef.current);
+    };
   }, []);
 
+  // Pulsing scan animation
   useEffect(() => {
     scanPulse.value = withRepeat(
       withSequence(
-        withTiming(1.3, { duration: 800 }),
-        withTiming(1, { duration: 800 })
+        withTiming(1.15, { duration: 1000 }),
+        withTiming(1, { duration: 1000 })
       ),
       -1,
       true
     );
   }, []);
 
+  // Profile overlay animation
   useEffect(() => {
-    if (selectedUser) {
-      overlayScale.value = withSpring(1, { damping: 12, stiffness: 100 });
-      overlayOpacity.value = withSpring(1);
+    if (detectedUser) {
+      overlayScale.value = withSpring(1, { damping: 15, stiffness: 120 });
+      overlayOpacity.value = withTiming(1, { duration: 300 });
     } else {
-      overlayScale.value = withSpring(0.8);
-      overlayOpacity.value = withSpring(0);
+      overlayScale.value = withSpring(0.9);
+      overlayOpacity.value = withTiming(0, { duration: 200 });
     }
-  }, [selectedUser]);
+  }, [detectedUser]);
 
-  const loadCurrentUser = async () => {
-    const user = await storage.getUser();
-    if (user) {
-      setCurrentUserId(user.id);
+  // Auto-detect when camera is ready (simulating face detection)
+  useEffect(() => {
+    if (cameraReady && !detectedUser && !detecting) {
+      startDetection();
     }
-  };
+  }, [cameraReady, detectedUser, detecting]);
 
-  const handleScan = async () => {
-    if (scanning) return;
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setScanning(true);
-    setNearbyUsers([]);
-    setSelectedUser(null);
+  const startDetection = () => {
+    setDetecting(true);
     
-    scanProgress.value = 0;
-    scanProgress.value = withTiming(1, { duration: 2500 });
+    // Show focus ring animation
+    focusRingScale.value = 0.8;
+    focusRingOpacity.value = withTiming(1, { duration: 200 });
+    focusRingScale.value = withSequence(
+      withTiming(1, { duration: 600 }),
+      withTiming(0.95, { duration: 400 })
+    );
 
-    try {
-      let lat = 37.4419;
-      let lng = -122.143;
-
-      if (locationPermission?.granted) {
-        try {
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          lat = location.coords.latitude;
-          lng = location.coords.longitude;
-        } catch (e) {}
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const baseUrl = getApiUrl();
-      const res = await fetch(
-        new URL(`/api/users/nearby?lat=${lat}&lng=${lng}&radius=500&excludeUserId=${currentUserId || ''}`, baseUrl).toString()
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        setNearbyUsers(data);
-        
-        if (data.length > 0) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setSelectedUser(data[0]);
-        } else {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        }
-      }
-    } catch (error) {
-      console.log("Error scanning:", error);
-    } finally {
-      setScanning(false);
-    }
+    // Simulate face detection after 1.5-2.5 seconds
+    const delay = 1500 + Math.random() * 1000;
+    
+    detectionTimeoutRef.current = setTimeout(() => {
+      // Pick next demo profile
+      const profile = DEMO_PROFILES[currentDemoIndex % DEMO_PROFILES.length];
+      setCurrentDemoIndex(prev => prev + 1);
+      
+      // Haptic feedback on detection
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Hide focus ring
+      focusRingOpacity.value = withTiming(0, { duration: 200 });
+      
+      // Show detected profile
+      setDetectedUser(profile);
+      setDetecting(false);
+    }, delay);
   };
 
-  const handleSelectUser = (user: NearbyUser) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedUser(user);
+  const handleCameraReady = () => {
+    setCameraReady(true);
   };
 
   const handleProfilePress = () => {
@@ -143,54 +162,28 @@ export default function ARScreen() {
 
   const handleDismiss = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedUser(null);
+    setDetectedUser(null);
     setShowProfile(false);
+    
+    // Re-detect after a short delay
+    redetectTimeoutRef.current = setTimeout(() => {
+      if (cameraReady) {
+        startDetection();
+      }
+    }, 2000);
   };
 
-  const handleSendHandshake = async () => {
-    if (!selectedUser || !currentUserId) return;
+  const handleSendHandshake = () => {
+    if (!detectedUser) return;
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    try {
-      let lat: number | undefined;
-      let lng: number | undefined;
-
-      if (locationPermission?.granted) {
-        try {
-          const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          lat = location.coords.latitude;
-          lng = location.coords.longitude;
-        } catch (e) {}
-      }
-
-      const baseUrl = getApiUrl();
-      const res = await fetch(new URL("/api/handshakes", baseUrl).toString(), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          senderId: currentUserId,
-          receiverId: selectedUser.id,
-          senderLat: lat,
-          senderLng: lng,
-          message: "Hey! I spotted you nearby. Let's connect!",
-        }),
-      });
-
-      if (res.ok) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(
-          "Handshake Sent!",
-          `Your connection request has been sent to ${selectedUser.name}. They'll be notified!`,
-          [{ text: "Great!", onPress: handleDismiss }]
-        );
-      } else {
-        const error = await res.json();
-        Alert.alert("Oops!", error.message || "Couldn't send handshake. Try again.");
-      }
-    } catch (error) {
-      Alert.alert("Error", "Something went wrong. Please try again.");
-    }
+    Alert.alert(
+      "Handshake Sent!",
+      `Your connection request has been sent to ${detectedUser.name}. They'll be notified!`,
+      [{ text: "Great!", onPress: handleDismiss }]
+    );
   };
 
   const overlayAnimatedStyle = useAnimatedStyle(() => ({
@@ -200,11 +193,12 @@ export default function ARScreen() {
 
   const scanAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scanPulse.value }],
-    opacity: 2 - scanPulse.value,
+    opacity: 0.6,
   }));
 
-  const scanProgressStyle = useAnimatedStyle(() => ({
-    width: `${scanProgress.value * 100}%`,
+  const focusRingStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: focusRingScale.value }],
+    opacity: focusRingOpacity.value,
   }));
 
   if (!permission) {
@@ -263,62 +257,58 @@ export default function ARScreen() {
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="back"
+        facing="front"
+        onCameraReady={handleCameraReady}
       />
 
+      {/* Top status bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.md }]}>
         <View style={[styles.badge, { backgroundColor: "rgba(0,0,0,0.6)" }]}>
           <Feather 
-            name={scanning ? "loader" : selectedUser ? "check-circle" : "aperture"} 
+            name={detecting ? "eye" : detectedUser ? "check-circle" : "aperture"} 
             size={16} 
-            color={selectedUser ? "#4CAF50" : "#FFF"} 
+            color={detectedUser ? "#4CAF50" : "#FFF"} 
           />
           <ThemedText type="small" style={{ color: "#FFF" }}>
-            {scanning ? "Scanning..." : selectedUser ? `Found: ${selectedUser.name}` : "Ready to scan"}
+            {detecting ? "Detecting..." : detectedUser ? `Found: ${detectedUser.name}` : "Looking for faces..."}
           </ThemedText>
         </View>
-        
-        {nearbyUsers.length > 1 ? (
-          <View style={[styles.badge, { backgroundColor: "rgba(0,0,0,0.6)" }]}>
-            <Feather name="users" size={14} color="#FFF" />
-            <ThemedText type="small" style={{ color: "#FFF" }}>
-              {nearbyUsers.length} nearby
-            </ThemedText>
-          </View>
-        ) : null}
       </View>
 
-      {scanning ? (
-        <View style={styles.scanOverlay}>
-          <Animated.View style={[styles.scanRing, scanAnimatedStyle, { borderColor: theme.primary }]} />
-          <View style={[styles.scanCenter, { backgroundColor: `${theme.primary}40` }]}>
-            <Feather name="wifi" size={40} color="#FFF" />
-          </View>
-          <View style={[styles.scanProgressBar, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
-            <Animated.View 
-              style={[styles.scanProgressFill, { backgroundColor: theme.primary }, scanProgressStyle]} 
-            />
-          </View>
-          <ThemedText type="body" style={{ color: "#FFF", marginTop: Spacing.lg }}>
-            Scanning for people nearby...
+      {/* Focus ring for detection */}
+      {detecting ? (
+        <View style={styles.scanOverlay} pointerEvents="none">
+          <Animated.View 
+            style={[
+              styles.focusRing, 
+              focusRingStyle,
+              { borderColor: theme.primary }
+            ]} 
+          />
+          <View style={[styles.focusCorner, styles.focusTopLeft, { borderColor: theme.primary }]} />
+          <View style={[styles.focusCorner, styles.focusTopRight, { borderColor: theme.primary }]} />
+          <View style={[styles.focusCorner, styles.focusBottomLeft, { borderColor: theme.primary }]} />
+          <View style={[styles.focusCorner, styles.focusBottomRight, { borderColor: theme.primary }]} />
+          <ThemedText type="small" style={styles.detectingText}>
+            Analyzing...
           </ThemedText>
-        </View>
-      ) : !selectedUser && nearbyUsers.length === 0 ? (
-        <View style={styles.scanOverlay}>
-          <Animated.View style={[styles.scanRing, scanAnimatedStyle, { borderColor: theme.primary }]} />
-          <View style={[styles.scanCenter, { backgroundColor: `${theme.primary}30` }]}>
-            <Feather name="user" size={32} color={theme.primary} />
-          </View>
         </View>
       ) : null}
 
-      {selectedUser ? (
+      {/* Subtle scanning indicator when idle */}
+      {!detectedUser && !detecting && cameraReady ? (
+        <View style={styles.scanOverlay} pointerEvents="none">
+          <Animated.View style={[styles.scanRing, scanAnimatedStyle, { borderColor: theme.primary }]} />
+        </View>
+      ) : null}
+
+      {detectedUser ? (
         <Animated.View
           style={[
             styles.profileOverlay,
             overlayAnimatedStyle,
             {
-              top: insets.top + 100,
+              top: insets.top + 120,
               alignSelf: "center",
             },
           ]}
@@ -327,20 +317,20 @@ export default function ARScreen() {
             <View style={styles.miniProfile}>
               <Image
                 source={
-                  selectedUser.avatarUrl
-                    ? { uri: selectedUser.avatarUrl }
+                  detectedUser.avatarUrl
+                    ? { uri: detectedUser.avatarUrl }
                     : require("../../assets/images/avatar-preset-1.png")
                 }
                 style={styles.miniAvatar}
               />
               <View style={styles.miniNameContainer}>
                 <ThemedText type="body" style={{ color: "#FFF", fontWeight: "700" }}>
-                  {selectedUser.name}
+                  {detectedUser.name}
                 </ThemedText>
                 <View style={styles.distanceBadge}>
                   <Feather name="map-pin" size={10} color="#FFF" />
                   <ThemedText type="caption" style={{ color: "#FFF" }}>
-                    {selectedUser.distance}m away
+                    {detectedUser.distance}m away
                   </ThemedText>
                 </View>
               </View>
@@ -357,33 +347,33 @@ export default function ARScreen() {
                 <View style={styles.statusRow}>
                   <View style={[
                     styles.statusDot,
-                    { backgroundColor: selectedUser.status === "open" ? "#4CAF50" : theme.warning }
+                    { backgroundColor: detectedUser.status === "open" ? "#4CAF50" : theme.warning }
                   ]} />
                   <ThemedText type="small" style={{ color: "rgba(255,255,255,0.8)" }}>
-                    {selectedUser.status === "open" ? "Open to connect" : "Busy"}
+                    {detectedUser.status === "open" ? "Open to connect" : "Busy"}
                   </ThemedText>
                 </View>
                 <View style={[styles.scoreBadge, { backgroundColor: `${theme.secondary}30` }]}>
                   <Feather name="award" size={14} color={theme.secondary} />
                   <ThemedText type="small" style={{ color: theme.secondary, fontWeight: "600" }}>
-                    {selectedUser.cliqueScore}
+                    {detectedUser.cliqueScore}
                   </ThemedText>
                 </View>
               </View>
 
-              {selectedUser.bio ? (
+              {detectedUser.bio ? (
                 <ThemedText type="body" style={{ color: "rgba(255,255,255,0.8)", marginTop: Spacing.md }}>
-                  {selectedUser.bio}
+                  {detectedUser.bio}
                 </ThemedText>
               ) : null}
 
-              {selectedUser.interests && selectedUser.interests.length > 0 ? (
+              {detectedUser.interests && detectedUser.interests.length > 0 ? (
                 <View style={styles.interestsSection}>
                   <ThemedText type="small" style={{ color: "rgba(255,255,255,0.5)", marginBottom: Spacing.sm }}>
                     Interests
                   </ThemedText>
                   <View style={styles.interestsList}>
-                    {selectedUser.interests.slice(0, 4).map((interest, index) => (
+                    {detectedUser.interests.slice(0, 4).map((interest, index) => (
                       <View key={index} style={[styles.interestTag, { backgroundColor: "rgba(255,255,255,0.15)" }]}>
                         <ThemedText type="caption" style={{ color: "#FFF" }}>
                           {interest}
@@ -408,26 +398,9 @@ export default function ARScreen() {
         </Animated.View>
       ) : null}
 
-      {nearbyUsers.length > 1 && selectedUser ? (
-        <View style={[styles.userDots, { bottom: insets.bottom + 140 }]}>
-          {nearbyUsers.map((user, index) => (
-            <Pressable
-              key={user.id}
-              style={[
-                styles.userDot,
-                {
-                  backgroundColor: user.id === selectedUser.id ? theme.primary : "rgba(255,255,255,0.5)",
-                  borderColor: user.id === selectedUser.id ? "#FFF" : "transparent",
-                },
-              ]}
-              onPress={() => handleSelectUser(user)}
-            />
-          ))}
-        </View>
-      ) : null}
-
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 80 }]}>
-        {selectedUser ? (
+      {/* Bottom dismiss button when profile is shown */}
+      {detectedUser ? (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 80 }]}>
           <Pressable
             style={[styles.dismissButton, { backgroundColor: "rgba(0,0,0,0.7)" }]}
             onPress={handleDismiss}
@@ -437,23 +410,8 @@ export default function ARScreen() {
               Dismiss
             </ThemedText>
           </Pressable>
-        ) : (
-          <Pressable
-            style={[
-              styles.detectButton, 
-              { backgroundColor: scanning ? "rgba(0,0,0,0.5)" : theme.primary },
-              scanning && { opacity: 0.7 }
-            ]}
-            onPress={handleScan}
-            disabled={scanning}
-          >
-            <Feather name={scanning ? "loader" : "radio"} size={24} color="#FFF" />
-            <ThemedText type="body" style={{ color: "#FFF", fontWeight: "600" }}>
-              {scanning ? "Scanning..." : "Scan Nearby"}
-            </ThemedText>
-          </Pressable>
-        )}
-      </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -485,6 +443,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.sm,
+    zIndex: 10,
   },
   badge: {
     flexDirection: "row",
@@ -498,6 +457,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: SCREEN_WIDTH - Spacing.lg * 2,
     maxWidth: 360,
+    zIndex: 20,
   },
   miniProfile: {
     flexDirection: "row",
@@ -509,9 +469,9 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
   },
   miniAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 2,
     borderColor: "#FFF",
   },
@@ -582,6 +542,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: Spacing.lg,
     alignItems: "center",
+    zIndex: 10,
   },
   scanOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -590,58 +551,67 @@ const styles = StyleSheet.create({
   },
   scanRing: {
     position: "absolute",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    borderWidth: 2,
+  },
+  focusRing: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 3,
+    position: "absolute",
+  },
+  focusCorner: {
+    position: "absolute",
+    width: 30,
+    height: 30,
     borderWidth: 3,
   },
-  scanCenter: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: "center",
-    justifyContent: "center",
+  focusTopLeft: {
+    top: SCREEN_HEIGHT / 2 - 110,
+    left: SCREEN_WIDTH / 2 - 110,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 8,
   },
-  scanProgressBar: {
-    width: 200,
-    height: 4,
-    borderRadius: 2,
-    marginTop: Spacing.xl,
-    overflow: "hidden",
+  focusTopRight: {
+    top: SCREEN_HEIGHT / 2 - 110,
+    right: SCREEN_WIDTH / 2 - 110,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 8,
   },
-  scanProgressFill: {
-    height: "100%",
-    borderRadius: 2,
+  focusBottomLeft: {
+    bottom: SCREEN_HEIGHT / 2 - 110,
+    left: SCREEN_WIDTH / 2 - 110,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+  },
+  focusBottomRight: {
+    bottom: SCREEN_HEIGHT / 2 - 110,
+    right: SCREEN_WIDTH / 2 - 110,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 8,
+  },
+  detectingText: {
+    color: "#FFF",
+    marginTop: 130,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
   },
   dismissButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
-  },
-  detectButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.md,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing["3xl"],
-    borderRadius: BorderRadius.full,
-  },
-  userDots: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: Spacing.sm,
-  },
-  userDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 2,
   },
 });
