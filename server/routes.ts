@@ -279,6 +279,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/users/nearby", async (req, res) => {
+    try {
+      const lat = parseFloat(req.query.lat as string);
+      const lng = parseFloat(req.query.lng as string);
+      const radius = parseFloat(req.query.radius as string) || 500;
+      const excludeUserId = req.query.excludeUserId as string || "";
+
+      if (isNaN(lat) || isNaN(lng)) {
+        return res.status(400).json({ error: "Invalid coordinates" });
+      }
+
+      const profiles = await storage.getNearbyProfiles(lat, lng, radius);
+      
+      const nearbyUsers = profiles
+        .filter(p => p.userId !== excludeUserId)
+        .map(p => {
+          const dLat = (p.lastLat! - lat) * Math.PI / 180;
+          const dLon = (p.lastLng! - lng) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat * Math.PI / 180) * Math.cos(p.lastLat! * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const distanceMeters = Math.round(6371000 * c);
+
+          return {
+            id: p.userId,
+            name: p.name,
+            avatarUrl: p.avatarUrl || null,
+            cliqueScore: p.cliqueScore,
+            distance: distanceMeters,
+            status: p.status,
+            bio: p.bio || null,
+            interests: p.interests || [],
+          };
+        })
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 10);
+
+      res.json(nearbyUsers);
+    } catch (error) {
+      console.error("Error fetching nearby users:", error);
+      res.status(500).json({ error: "Failed to fetch nearby users" });
+    }
+  });
+
   // ============= HANDSHAKE ROUTES =============
   app.post("/api/handshakes", async (req, res) => {
     try {
