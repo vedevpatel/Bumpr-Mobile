@@ -6,6 +6,7 @@ import UserProfileScreen from "@/screens/UserProfileScreen";
 import PrivacyScreen from "@/screens/PrivacyScreen";
 import HelpScreen from "@/screens/HelpScreen";
 import CreateMomentScreen from "@/screens/CreateMomentScreen";
+import ViewMomentScreen from "@/screens/ViewMomentScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 
 export type RootStackParamList = {
@@ -15,6 +16,7 @@ export type RootStackParamList = {
   Privacy: undefined;
   Help: undefined;
   CreateMoment: undefined;
+  ViewMoment: { momentId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -61,6 +63,14 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="CreateMoment"
         component={CreateMomentScreen}
+        options={{
+          presentation: "fullScreenModal",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="ViewMoment"
+        component={ViewMomentScreen}
         options={{
           presentation: "fullScreenModal",
           headerShown: false,

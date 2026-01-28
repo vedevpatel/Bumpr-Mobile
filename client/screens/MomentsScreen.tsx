@@ -154,9 +154,13 @@ export default function MomentsScreen({ navigation }: MomentsScreenProps) {
     </View>
   );
 
+  const handleViewMoment = (momentId: string) => {
+    navigation.navigate("ViewMoment", { momentId });
+  };
+
   const renderMoment = ({ item, index }: { item: Moment; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 100).duration(400)}>
-      <MomentCard moment={item} onPress={() => {}} />
+      <MomentCard moment={item} onPress={() => handleViewMoment(item.id)} />
     </Animated.View>
   );
 

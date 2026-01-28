@@ -6,15 +6,16 @@ import { Platform, StyleSheet, View } from "react-native";
 
 import MapScreen from "@/screens/MapScreen";
 import MomentsScreen from "@/screens/MomentsScreen";
+import ARScreen from "@/screens/ARScreen";
 import DiscoverScreen from "@/screens/DiscoverScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useTheme } from "@/hooks/useTheme";
-import { useScreenOptions } from "@/hooks/useScreenOptions";
 
 export type MainTabParamList = {
   MapTab: undefined;
   MomentsTab: undefined;
+  ARTab: undefined;
   DiscoverTab: undefined;
   ProfileTab: undefined;
 };
@@ -23,13 +24,11 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabNavigator() {
   const { theme, isDark } = useTheme();
-  const screenOptions = useScreenOptions();
 
   return (
     <Tab.Navigator
       initialRouteName="MapTab"
       screenOptions={{
-        ...screenOptions,
         tabBarActiveTintColor: theme.primary,
         tabBarInactiveTintColor: theme.tabIconDefault,
         tabBarStyle: {
@@ -75,6 +74,17 @@ export default function MainTabNavigator() {
           headerTitle: () => <HeaderTitle title="Moments" />,
           tabBarIcon: ({ color, size }) => (
             <Feather name="play-circle" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="ARTab"
+        component={ARScreen}
+        options={{
+          title: "AR",
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="aperture" size={size} color={color} />
           ),
         }}
       />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, Image, Pressable, ScrollView, Switch, Alert } from "react-native";
+import { View, StyleSheet, Image, Pressable, ScrollView, Switch, Alert, Platform, ActionSheetIOS } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -7,6 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 
 import { ThemedText } from "@/components/ThemedText";
 import { StatusToggle } from "@/components/StatusToggle";
@@ -114,6 +115,93 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     navigation.navigate("Help");
   };
 
+  const handleChangeAvatar = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    const options = ["Take Photo", "Choose from Library", "Remove Photo", "Cancel"];
+    
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          destructiveButtonIndex: 2,
+          cancelButtonIndex: 3,
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 0) {
+            await takePhoto();
+          } else if (buttonIndex === 1) {
+            await pickImage();
+          } else if (buttonIndex === 2) {
+            await removePhoto();
+          }
+        }
+      );
+    } else {
+      Alert.alert("Change Photo", "Choose an option", [
+        { text: "Take Photo", onPress: takePhoto },
+        { text: "Choose from Library", onPress: pickImage },
+        { text: "Remove Photo", onPress: removePhoto, style: "destructive" },
+        { text: "Cancel", style: "cancel" },
+      ]);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Camera permission is required to take photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      await storage.updateAvatarUrl(uri);
+      if (user) {
+        setUser({ ...user, avatarUrl: uri });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Photo library permission is required.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      await storage.updateAvatarUrl(uri);
+      if (user) {
+        setUser({ ...user, avatarUrl: uri });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  const removePhoto = async () => {
+    await storage.updateAvatarUrl(null);
+    if (user) {
+      setUser({ ...user, avatarUrl: undefined });
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
   const handleLogout = () => {
     Alert.alert(
       "Log Out",
@@ -139,9 +227,11 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     );
   }
 
-  const avatarImage = user.avatarPreset === 1
-    ? require("../../assets/images/avatar-preset-1.png")
-    : require("../../assets/images/avatar-preset-2.png");
+  const avatarSource = user.avatarUrl
+    ? { uri: user.avatarUrl }
+    : user.avatarPreset === 1
+      ? require("../../assets/images/avatar-preset-1.png")
+      : require("../../assets/images/avatar-preset-2.png");
 
   return (
     <ScrollView
@@ -156,10 +246,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     >
       <Animated.View entering={FadeInDown.duration(400)} style={styles.profileHeader}>
         <View style={styles.avatarContainer}>
-          <Image source={avatarImage} style={styles.avatar} />
+          <Image source={avatarSource} style={styles.avatar} />
           <Pressable
             style={[styles.editAvatarButton, { backgroundColor: theme.primary }]}
-            onPress={() => {}}
+            onPress={handleChangeAvatar}
           >
             <Feather name="camera" size={14} color="#FFF" />
           </Pressable>

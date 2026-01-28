@@ -253,6 +253,29 @@ export const storage = {
     }
   },
 
+  async updateMoment(moment: Moment): Promise<void> {
+    try {
+      const moments = await this.getMoments();
+      const index = moments.findIndex(m => m.id === moment.id);
+      if (index !== -1) {
+        moments[index] = moment;
+        await AsyncStorage.setItem(STORAGE_KEYS.MOMENTS, JSON.stringify(moments));
+      }
+    } catch (error) {
+      console.error("Failed to update moment:", error);
+    }
+  },
+
+  async updateAvatarUrl(avatarUrl: string | null): Promise<void> {
+    try {
+      const user = await this.getUser();
+      user.avatarUrl = avatarUrl || undefined;
+      await this.saveUser(user);
+    } catch (error) {
+      console.error("Failed to update avatar:", error);
+    }
+  },
+
   // Reputation System
   async getReputationData(): Promise<ReputationData> {
     try {

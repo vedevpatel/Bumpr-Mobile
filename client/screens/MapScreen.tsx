@@ -16,6 +16,7 @@ import { FAB } from "@/components/FAB";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/Button";
 import { MapViewWrapper } from "@/components/MapViewWrapper";
+import { Marker } from "react-native-maps";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
 import { storage } from "@/lib/storage";
@@ -62,9 +63,19 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   const fetchLocation = async () => {
     try {
       const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.High,
       });
       setLocation(loc);
+
+      // Animate map to user's actual location
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      }
 
       const reverseGeocode = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
@@ -160,7 +171,9 @@ export default function MapScreen({ navigation }: MapScreenProps) {
         mapRef={mapRef}
         initialRegion={defaultRegion}
         isDark={isDark}
-        showsUserLocation={true}
+        showsUserLocation={false}
+        userCoords={location ? { latitude: location.coords.latitude, longitude: location.coords.longitude } : null}
+        primaryColor={theme.primary}
       />
 
       <Animated.View
