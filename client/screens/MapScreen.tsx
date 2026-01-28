@@ -197,13 +197,7 @@ export default function MapScreen({ navigation }: MapScreenProps) {
         style={[styles.emptyStateContainer, { bottom: tabBarHeight + (showSummary && spaceSummary ? 220 : 100) }]}
       >
         <View style={[styles.emptyCard, { backgroundColor: theme.backgroundDefault }, Shadows.card]}>
-          <View style={[styles.youBadge, { backgroundColor: `${theme.primary}15` }]}>
-            <Feather name="navigation" size={16} color={theme.primary} />
-            <ThemedText type="small" style={{ color: theme.primary, fontWeight: "600" }}>
-              You're here
-            </ThemedText>
-          </View>
-          <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center", marginTop: Spacing.sm }}>
+          <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center" }}>
             No one else nearby yet. Be the first to connect in {locationName}!
           </ThemedText>
         </View>
@@ -270,13 +264,5 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     alignItems: "center",
-  },
-  youBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
   },
 });

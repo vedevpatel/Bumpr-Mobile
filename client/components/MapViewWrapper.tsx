@@ -38,6 +38,7 @@ export function MapViewWrapper({
       {userCoords ? (
         <Marker
           coordinate={userCoords}
+          title="You are here"
           anchor={{ x: 0.5, y: 0.5 }}
         >
           <View style={[styles.userMarker, { backgroundColor: primaryColor }]}>

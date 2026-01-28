@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Pressable, Image } from "react-native";
+import { View, StyleSheet, Pressable, Image, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useVideoPlayer, VideoView } from "expo-video";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -25,6 +26,7 @@ export default function ViewMomentScreen({ navigation, route }: ViewMomentScreen
   const { momentId } = route.params;
 
   const [moment, setMoment] = useState<Moment | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
 
   useEffect(() => {
     loadMoment();
@@ -35,15 +37,39 @@ export default function ViewMomentScreen({ navigation, route }: ViewMomentScreen
     const found = moments.find((m) => m.id === momentId);
     if (found) {
       setMoment(found);
-      // Increment view count
       const updated = { ...found, views: (found.views || 0) + 1 };
       await storage.updateMoment(updated);
     }
   };
 
+  const player = useVideoPlayer(moment?.videoUri || "", (player) => {
+    player.loop = true;
+    if (moment?.videoUri) {
+      player.play();
+    }
+  });
+
+  useEffect(() => {
+    if (player && moment?.videoUri) {
+      if (isPlaying) {
+        player.play();
+      } else {
+        player.pause();
+      }
+    }
+  }, [isPlaying, player, moment?.videoUri]);
+
   const handleClose = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (player) {
+      player.pause();
+    }
     navigation.goBack();
+  };
+
+  const handlePlayPause = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsPlaying(!isPlaying);
   };
 
   const formatTimeAgo = (dateString: string) => {
@@ -76,14 +102,25 @@ export default function ViewMomentScreen({ navigation, route }: ViewMomentScreen
     ? require("../../assets/images/avatar-preset-1.png")
     : require("../../assets/images/avatar-preset-2.png");
 
+  const hasVideo = moment.videoUri && moment.videoUri.length > 0;
+
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[theme.primary, theme.secondary]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+      {hasVideo ? (
+        <VideoView
+          player={player}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          nativeControls={false}
+        />
+      ) : (
+        <LinearGradient
+          colors={[theme.primary, theme.secondary]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      )}
 
       <LinearGradient
         colors={["rgba(0,0,0,0.6)", "transparent", "transparent", "rgba(0,0,0,0.8)"]}
@@ -146,11 +183,24 @@ export default function ViewMomentScreen({ navigation, route }: ViewMomentScreen
         </View>
       </Animated.View>
 
-      <View style={styles.playPauseOverlay}>
-        <View style={styles.playIcon}>
-          <Feather name="play" size={32} color="#FFF" />
+      {hasVideo ? (
+        <Pressable style={styles.playPauseOverlay} onPress={handlePlayPause}>
+          {!isPlaying ? (
+            <View style={styles.playIcon}>
+              <Feather name="play" size={32} color="#FFF" />
+            </View>
+          ) : null}
+        </Pressable>
+      ) : (
+        <View style={styles.playPauseOverlay}>
+          <View style={styles.noVideoContainer}>
+            <Feather name="video-off" size={48} color="rgba(255,255,255,0.5)" />
+            <ThemedText type="body" style={{ color: "rgba(255,255,255,0.7)", marginTop: Spacing.md }}>
+              Video not available
+            </ThemedText>
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -242,5 +292,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingLeft: 4,
+  },
+  noVideoContainer: {
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

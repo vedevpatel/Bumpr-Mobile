@@ -41,26 +41,20 @@ export default function DiscoverScreen() {
           accuracy: Location.Accuracy.Low,
         });
         
-        const reverseGeocode = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        // Use coordinates directly without geocoding to avoid rate limits
+        const baseUrl = getApiUrl();
+        const url = new URL("/api/venues", baseUrl);
+        url.searchParams.set("lat", location.coords.latitude.toString());
+        url.searchParams.set("lng", location.coords.longitude.toString());
+        url.searchParams.set("city", "Nearby");
         
-        if (reverseGeocode.length > 0) {
-          const place = reverseGeocode[0];
-          const city = place.city || place.subregion || place.region || "Your Area";
-          setLocationName(city);
-          
-          const baseUrl = getApiUrl();
-          const url = new URL("/api/venues", baseUrl);
-          url.searchParams.set("lat", location.coords.latitude.toString());
-          url.searchParams.set("lng", location.coords.longitude.toString());
-          url.searchParams.set("city", city);
-          
-          const response = await fetch(url.toString());
-          if (response.ok) {
-            const data = await response.json();
-            setVenues(data);
+        const response = await fetch(url.toString());
+        if (response.ok) {
+          const data = await response.json();
+          setVenues(data);
+          // Get location name from first venue or use generic
+          if (data.length > 0) {
+            setLocationName("Nearby");
           }
         }
       }
