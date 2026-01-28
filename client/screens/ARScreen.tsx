@@ -2,15 +2,26 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, StyleSheet, Pressable, Platform, Image, Linking, Dimensions, Alert } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import Animated, { FadeIn, FadeInDown, FadeOut, useAnimatedStyle, useSharedValue, withSpring, withRepeat, withSequence, withTiming, withDelay, runOnJS } from "react-native-reanimated";
+import { BlurView } from "expo-blur";
+import Animated, { 
+  FadeIn, 
+  FadeOut, 
+  useAnimatedStyle, 
+  useSharedValue, 
+  withTiming, 
+  withSequence,
+  withDelay,
+  Easing,
+  runOnJS,
+  interpolate
+} from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -25,9 +36,9 @@ interface NearbyUser {
   status: string;
   bio?: string;
   interests?: string[];
+  affiliations?: string[];
 }
 
-// Demo profiles for face detection simulation
 const DEMO_PROFILES: NearbyUser[] = [
   {
     id: "demo-1",
@@ -38,6 +49,7 @@ const DEMO_PROFILES: NearbyUser[] = [
     status: "open",
     bio: "Tech enthusiast & coffee lover. Always up for interesting conversations!",
     interests: ["Photography", "AI", "Hiking", "Coffee"],
+    affiliations: ["Stanford '19", "Sequoia Capital", "YC W21"],
   },
   {
     id: "demo-2", 
@@ -48,6 +60,7 @@ const DEMO_PROFILES: NearbyUser[] = [
     status: "open",
     bio: "Creative director by day, musician by night. Let's collaborate!",
     interests: ["Music", "Design", "Art", "Travel"],
+    affiliations: ["RISD", "Apple Design", "Grammy Nom."],
   },
   {
     id: "demo-3",
@@ -58,62 +71,47 @@ const DEMO_PROFILES: NearbyUser[] = [
     status: "open", 
     bio: "Startup founder passionate about sustainability and innovation.",
     interests: ["Startups", "Climate", "Running", "Books"],
+    affiliations: ["MIT", "Techstars", "Forbes 30u30"],
   },
+];
+
+const RESEARCH_PHASES = [
+  "Querying social indices...",
+  "Aggregating affiliations...",
+  "Cross-referencing network nodes...",
+  "Compiling behavioral patterns...",
+  "Analyzing connection graph...",
+  "Resolving identity vectors...",
 ];
 
 export default function ARScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const cameraRef = useRef<CameraView>(null);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraReady, setCameraReady] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectedUser, setDetectedUser] = useState<NearbyUser | null>(null);
-  const [showProfile, setShowProfile] = useState(false);
   const [currentDemoIndex, setCurrentDemoIndex] = useState(0);
+  const [researchPhase, setResearchPhase] = useState(0);
   const detectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const redetectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const phaseIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const overlayScale = useSharedValue(0);
-  const overlayOpacity = useSharedValue(0);
-  const scanPulse = useSharedValue(1);
-  const focusRingScale = useSharedValue(0.8);
   const focusRingOpacity = useSharedValue(0);
+  const researchTextOpacity = useSharedValue(0);
+  const dossierOpacity = useSharedValue(0);
+  const dossierTranslateY = useSharedValue(20);
 
-  // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (detectionTimeoutRef.current) clearTimeout(detectionTimeoutRef.current);
       if (redetectTimeoutRef.current) clearTimeout(redetectTimeoutRef.current);
+      if (phaseIntervalRef.current) clearInterval(phaseIntervalRef.current);
     };
   }, []);
 
-  // Pulsing scan animation
-  useEffect(() => {
-    scanPulse.value = withRepeat(
-      withSequence(
-        withTiming(1.15, { duration: 1000 }),
-        withTiming(1, { duration: 1000 })
-      ),
-      -1,
-      true
-    );
-  }, []);
-
-  // Profile overlay animation
-  useEffect(() => {
-    if (detectedUser) {
-      overlayScale.value = withSpring(1, { damping: 15, stiffness: 120 });
-      overlayOpacity.value = withTiming(1, { duration: 300 });
-    } else {
-      overlayScale.value = withSpring(0.9);
-      overlayOpacity.value = withTiming(0, { duration: 200 });
-    }
-  }, [detectedUser]);
-
-  // Auto-detect when camera is ready (simulating face detection)
   useEffect(() => {
     if (cameraReady && !detectedUser && !detecting) {
       startDetection();
@@ -122,32 +120,38 @@ export default function ARScreen() {
 
   const startDetection = () => {
     setDetecting(true);
+    setResearchPhase(0);
     
-    // Show focus ring animation
-    focusRingScale.value = 0.8;
-    focusRingOpacity.value = withTiming(1, { duration: 200 });
-    focusRingScale.value = withSequence(
-      withTiming(1, { duration: 600 }),
-      withTiming(0.95, { duration: 400 })
-    );
-
-    // Simulate face detection after 1.5-2.5 seconds
-    const delay = 1500 + Math.random() * 1000;
+    focusRingOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
+    
+    researchTextOpacity.value = withDelay(300, withTiming(1, { duration: 300 }));
+    
+    let phase = 0;
+    phaseIntervalRef.current = setInterval(() => {
+      phase = (phase + 1) % RESEARCH_PHASES.length;
+      setResearchPhase(phase);
+    }, 400);
+    
+    const delay = 2000 + Math.random() * 800;
     
     detectionTimeoutRef.current = setTimeout(() => {
-      // Pick next demo profile
+      if (phaseIntervalRef.current) clearInterval(phaseIntervalRef.current);
+      
       const profile = DEMO_PROFILES[currentDemoIndex % DEMO_PROFILES.length];
       setCurrentDemoIndex(prev => prev + 1);
       
-      // Haptic feedback on detection
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      // Hide focus ring
       focusRingOpacity.value = withTiming(0, { duration: 200 });
+      researchTextOpacity.value = withTiming(0, { duration: 150 });
       
-      // Show detected profile
-      setDetectedUser(profile);
-      setDetecting(false);
+      setTimeout(() => {
+        setDetectedUser(profile);
+        setDetecting(false);
+        
+        dossierOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
+        dossierTranslateY.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
+      }, 100);
     }, delay);
   };
 
@@ -155,22 +159,21 @@ export default function ARScreen() {
     setCameraReady(true);
   };
 
-  const handleProfilePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setShowProfile(!showProfile);
-  };
-
   const handleDismiss = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDetectedUser(null);
-    setShowProfile(false);
     
-    // Re-detect after a short delay
+    dossierOpacity.value = withTiming(0, { duration: 150 });
+    dossierTranslateY.value = withTiming(20, { duration: 150 });
+    
+    setTimeout(() => {
+      setDetectedUser(null);
+    }, 150);
+    
     redetectTimeoutRef.current = setTimeout(() => {
       if (cameraReady) {
         startDetection();
       }
-    }, 2000);
+    }, 1500);
   };
 
   const handleSendHandshake = () => {
@@ -180,25 +183,23 @@ export default function ARScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
     Alert.alert(
-      "Handshake Sent!",
-      `Your connection request has been sent to ${detectedUser.name}. They'll be notified!`,
-      [{ text: "Great!", onPress: handleDismiss }]
+      "Handshake Initiated",
+      `Connection request transmitted to ${detectedUser.name}.`,
+      [{ text: "Confirm", onPress: handleDismiss }]
     );
   };
 
-  const overlayAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: overlayScale.value }],
-    opacity: overlayOpacity.value,
-  }));
-
-  const scanAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scanPulse.value }],
-    opacity: 0.6,
-  }));
-
   const focusRingStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: focusRingScale.value }],
     opacity: focusRingOpacity.value,
+  }));
+
+  const researchTextStyle = useAnimatedStyle(() => ({
+    opacity: researchTextOpacity.value,
+  }));
+
+  const dossierStyle = useAnimatedStyle(() => ({
+    opacity: dossierOpacity.value,
+    transform: [{ translateY: dossierTranslateY.value }],
   }));
 
   if (!permission) {
@@ -261,156 +262,133 @@ export default function ARScreen() {
         onCameraReady={handleCameraReady}
       />
 
-      {/* Top status bar */}
+      {/* Subtle vignette overlay */}
+      <View style={styles.vignetteOverlay} pointerEvents="none" />
+
+      {/* Top status indicator */}
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.md }]}>
-        <View style={[styles.badge, { backgroundColor: "rgba(0,0,0,0.6)" }]}>
-          <Feather 
-            name={detecting ? "eye" : detectedUser ? "check-circle" : "aperture"} 
-            size={16} 
-            color={detectedUser ? "#4CAF50" : "#FFF"} 
-          />
-          <ThemedText type="small" style={{ color: "#FFF" }}>
-            {detecting ? "Detecting..." : detectedUser ? `Found: ${detectedUser.name}` : "Looking for faces..."}
+        <View style={styles.statusIndicator}>
+          <View style={[styles.statusDotLive, { backgroundColor: detecting ? "#00FF88" : detectedUser ? "#00FF88" : "#666" }]} />
+          <ThemedText style={styles.statusText}>
+            {detecting ? "SCANNING" : detectedUser ? "LOCKED" : "STANDBY"}
           </ThemedText>
         </View>
       </View>
 
-      {/* Focus ring for detection */}
+      {/* Focus ring and research phase */}
       {detecting ? (
         <View style={styles.scanOverlay} pointerEvents="none">
-          <Animated.View 
-            style={[
-              styles.focusRing, 
-              focusRingStyle,
-              { borderColor: theme.primary }
-            ]} 
-          />
-          <View style={[styles.focusCorner, styles.focusTopLeft, { borderColor: theme.primary }]} />
-          <View style={[styles.focusCorner, styles.focusTopRight, { borderColor: theme.primary }]} />
-          <View style={[styles.focusCorner, styles.focusBottomLeft, { borderColor: theme.primary }]} />
-          <View style={[styles.focusCorner, styles.focusBottomRight, { borderColor: theme.primary }]} />
-          <ThemedText type="small" style={styles.detectingText}>
-            Analyzing...
-          </ThemedText>
+          <Animated.View style={[styles.focusRingContainer, focusRingStyle]}>
+            <View style={styles.focusRing} />
+            <View style={[styles.focusCornerTL]} />
+            <View style={[styles.focusCornerTR]} />
+            <View style={[styles.focusCornerBL]} />
+            <View style={[styles.focusCornerBR]} />
+          </Animated.View>
+          
+          <Animated.View style={[styles.researchContainer, researchTextStyle]}>
+            <ThemedText style={styles.researchText}>
+              {RESEARCH_PHASES[researchPhase]}
+            </ThemedText>
+          </Animated.View>
         </View>
       ) : null}
 
-      {/* Subtle scanning indicator when idle */}
-      {!detectedUser && !detecting && cameraReady ? (
-        <View style={styles.scanOverlay} pointerEvents="none">
-          <Animated.View style={[styles.scanRing, scanAnimatedStyle, { borderColor: theme.primary }]} />
-        </View>
-      ) : null}
-
+      {/* Dossier Card */}
       {detectedUser ? (
-        <Animated.View
-          style={[
-            styles.profileOverlay,
-            overlayAnimatedStyle,
-            {
-              top: insets.top + 120,
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <Pressable onPress={handleProfilePress}>
-            <View style={styles.miniProfile}>
-              <Image
-                source={
-                  detectedUser.avatarUrl
-                    ? { uri: detectedUser.avatarUrl }
-                    : require("../../assets/images/avatar-preset-1.png")
-                }
-                style={styles.miniAvatar}
-              />
-              <View style={styles.miniNameContainer}>
-                <ThemedText type="body" style={{ color: "#FFF", fontWeight: "700" }}>
-                  {detectedUser.name}
-                </ThemedText>
-                <View style={styles.distanceBadge}>
-                  <Feather name="map-pin" size={10} color="#FFF" />
-                  <ThemedText type="caption" style={{ color: "#FFF" }}>
-                    {detectedUser.distance}m away
+        <Animated.View style={[styles.dossierContainer, dossierStyle]}>
+          <BlurView intensity={80} tint="dark" style={styles.dossierBlur}>
+            <View style={styles.dossierContent}>
+              {/* Header with avatar and name */}
+              <View style={styles.dossierHeader}>
+                <Image
+                  source={
+                    detectedUser.avatarUrl
+                      ? { uri: detectedUser.avatarUrl }
+                      : require("../../assets/images/avatar-preset-1.png")
+                  }
+                  style={styles.dossierAvatar}
+                />
+                <View style={styles.dossierNameSection}>
+                  <ThemedText style={styles.dossierName}>
+                    {detectedUser.name}
                   </ThemedText>
+                  <View style={styles.dossierStatusRow}>
+                    <View style={[styles.dossierLiveDot, { backgroundColor: detectedUser.status === "open" ? "#00FF88" : "#FF6B6B" }]} />
+                    <ThemedText style={styles.dossierStatusText}>
+                      {detectedUser.status === "open" ? "OPEN" : "BUSY"}
+                    </ThemedText>
+                  </View>
                 </View>
+                <Pressable style={styles.dismissBtn} onPress={handleDismiss}>
+                  <Feather name="x" size={18} color="rgba(255,255,255,0.6)" />
+                </Pressable>
               </View>
-              <Feather name={showProfile ? "chevron-up" : "chevron-down"} size={20} color="#FFF" />
-            </View>
-          </Pressable>
 
-          {showProfile ? (
-            <Animated.View
-              entering={FadeInDown.duration(300)}
-              style={[styles.expandedProfile, { backgroundColor: "rgba(30,30,30,0.92)" }]}
-            >
-              <View style={styles.profileHeader}>
-                <View style={styles.statusRow}>
-                  <View style={[
-                    styles.statusDot,
-                    { backgroundColor: detectedUser.status === "open" ? "#4CAF50" : theme.warning }
-                  ]} />
-                  <ThemedText type="small" style={{ color: "rgba(255,255,255,0.8)" }}>
-                    {detectedUser.status === "open" ? "Open to connect" : "Busy"}
-                  </ThemedText>
+              {/* Metrics row */}
+              <View style={styles.metricsRow}>
+                <View style={styles.metricItem}>
+                  <ThemedText style={styles.metricLabel}>PROXIMITY</ThemedText>
+                  <ThemedText style={styles.metricValue}>{detectedUser.distance}m</ThemedText>
                 </View>
-                <View style={[styles.scoreBadge, { backgroundColor: `${theme.secondary}30` }]}>
-                  <Feather name="award" size={14} color={theme.secondary} />
-                  <ThemedText type="small" style={{ color: theme.secondary, fontWeight: "600" }}>
-                    {detectedUser.cliqueScore}
-                  </ThemedText>
+                <View style={styles.metricDivider} />
+                <View style={styles.metricItem}>
+                  <ThemedText style={styles.metricLabel}>CLIQUE</ThemedText>
+                  <ThemedText style={styles.metricValue}>{detectedUser.cliqueScore}</ThemedText>
+                </View>
+                <View style={styles.metricDivider} />
+                <View style={styles.metricItem}>
+                  <ThemedText style={styles.metricLabel}>NODES</ThemedText>
+                  <ThemedText style={styles.metricValue}>{detectedUser.affiliations?.length || 0}</ThemedText>
                 </View>
               </View>
 
+              {/* Source Summary (Bio) */}
               {detectedUser.bio ? (
-                <ThemedText type="body" style={{ color: "rgba(255,255,255,0.8)", marginTop: Spacing.md }}>
-                  {detectedUser.bio}
-                </ThemedText>
+                <View style={styles.summarySection}>
+                  <ThemedText style={styles.sectionLabel}>SOURCE SUMMARY</ThemedText>
+                  <ThemedText style={styles.summaryText}>
+                    {detectedUser.bio}
+                  </ThemedText>
+                </View>
               ) : null}
 
-              {detectedUser.interests && detectedUser.interests.length > 0 ? (
-                <View style={styles.interestsSection}>
-                  <ThemedText type="small" style={{ color: "rgba(255,255,255,0.5)", marginBottom: Spacing.sm }}>
-                    Interests
-                  </ThemedText>
-                  <View style={styles.interestsList}>
-                    {detectedUser.interests.slice(0, 4).map((interest, index) => (
-                      <View key={index} style={[styles.interestTag, { backgroundColor: "rgba(255,255,255,0.15)" }]}>
-                        <ThemedText type="caption" style={{ color: "#FFF" }}>
-                          {interest}
-                        </ThemedText>
+              {/* Affiliations */}
+              {detectedUser.affiliations && detectedUser.affiliations.length > 0 ? (
+                <View style={styles.affiliationsSection}>
+                  <ThemedText style={styles.sectionLabel}>AFFILIATIONS</ThemedText>
+                  <View style={styles.affiliationsList}>
+                    {detectedUser.affiliations.map((affiliation, index) => (
+                      <View key={index} style={styles.affiliationTag}>
+                        <ThemedText style={styles.affiliationText}>{affiliation}</ThemedText>
                       </View>
                     ))}
                   </View>
                 </View>
               ) : null}
 
-              <Pressable
-                style={[styles.connectButton, { backgroundColor: theme.primary }]}
-                onPress={handleSendHandshake}
-              >
-                <Feather name="send" size={18} color="#FFF" />
-                <ThemedText type="body" style={{ color: "#FFF", fontWeight: "600" }}>
-                  Send Handshake
-                </ThemedText>
-              </Pressable>
-            </Animated.View>
-          ) : null}
-        </Animated.View>
-      ) : null}
+              {/* Interests */}
+              {detectedUser.interests && detectedUser.interests.length > 0 ? (
+                <View style={styles.interestsSection}>
+                  <ThemedText style={styles.sectionLabel}>INTERESTS</ThemedText>
+                  <View style={styles.interestsList}>
+                    {detectedUser.interests.slice(0, 4).map((interest, index) => (
+                      <View key={index} style={styles.interestTag}>
+                        <ThemedText style={styles.interestText}>{interest}</ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
 
-      {/* Bottom dismiss button when profile is shown */}
-      {detectedUser ? (
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 80 }]}>
-          <Pressable
-            style={[styles.dismissButton, { backgroundColor: "rgba(0,0,0,0.7)" }]}
-            onPress={handleDismiss}
-          >
-            <Feather name="x" size={20} color="#FFF" />
-            <ThemedText type="small" style={{ color: "#FFF" }}>
-              Dismiss
-            </ThemedText>
-          </Pressable>
-        </View>
+              {/* Action button */}
+              <Pressable style={styles.handshakeBtn} onPress={handleSendHandshake}>
+                <Feather name="zap" size={18} color="#000" />
+                <ThemedText style={styles.handshakeBtnText}>INITIATE HANDSHAKE</ThemedText>
+              </Pressable>
+            </View>
+          </BlurView>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -433,6 +411,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  vignetteOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+    borderWidth: 60,
+    borderColor: "rgba(0,0,0,0.3)",
+  },
   topBar: {
     position: "absolute",
     top: 0,
@@ -442,176 +426,263 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    gap: Spacing.sm,
     zIndex: 10,
   },
-  badge: {
+  statusIndicator: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-  },
-  profileOverlay: {
-    position: "absolute",
-    width: SCREEN_WIDTH - Spacing.lg * 2,
-    maxWidth: 360,
-    zIndex: 20,
-  },
-  miniProfile: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    backgroundColor: "rgba(0,0,0,0.85)",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.xl,
-  },
-  miniAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: "#FFF",
-  },
-  miniNameContainer: {
-    flex: 1,
-    gap: 2,
-  },
-  distanceBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  expandedProfile: {
-    marginTop: Spacing.sm,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.xl,
-    width: "100%",
-  },
-  profileHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
+    gap: 8,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
-  scoreBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
+  statusDotLive: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  interestsSection: {
-    marginTop: Spacing.lg,
-  },
-  interestsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.xs,
-  },
-  interestTag: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-  },
-  connectButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    marginTop: Spacing.lg,
-  },
-  bottomBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Spacing.lg,
-    alignItems: "center",
-    zIndex: 10,
+  statusText: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 11,
+    color: "rgba(255,255,255,0.7)",
+    letterSpacing: 2,
   },
   scanOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
   },
-  scanRing: {
-    position: "absolute",
+  focusRingContainer: {
+    width: 200,
+    height: 200,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  focusRing: {
     width: 180,
     height: 180,
     borderRadius: 90,
-    borderWidth: 2,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
   },
-  focusRing: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 3,
+  focusCornerTL: {
     position: "absolute",
+    top: 0,
+    left: 0,
+    width: 24,
+    height: 24,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: "#FFF",
   },
-  focusCorner: {
+  focusCornerTR: {
     position: "absolute",
-    width: 30,
-    height: 30,
-    borderWidth: 3,
+    top: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
+    borderColor: "#FFF",
   },
-  focusTopLeft: {
-    top: SCREEN_HEIGHT / 2 - 110,
-    left: SCREEN_WIDTH / 2 - 110,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 8,
+  focusCornerBL: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    width: 24,
+    height: 24,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderColor: "#FFF",
   },
-  focusTopRight: {
-    top: SCREEN_HEIGHT / 2 - 110,
-    right: SCREEN_WIDTH / 2 - 110,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-    borderTopRightRadius: 8,
+  focusCornerBR: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderColor: "#FFF",
   },
-  focusBottomLeft: {
-    bottom: SCREEN_HEIGHT / 2 - 110,
-    left: SCREEN_WIDTH / 2 - 110,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
+  researchContainer: {
+    position: "absolute",
+    top: SCREEN_HEIGHT / 2 + 120,
+    alignItems: "center",
   },
-  focusBottomRight: {
-    bottom: SCREEN_HEIGHT / 2 - 110,
-    right: SCREEN_WIDTH / 2 - 110,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-    borderBottomRightRadius: 8,
+  researchText: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.6)",
+    letterSpacing: 0.5,
   },
-  detectingText: {
+  dossierContainer: {
+    position: "absolute",
+    bottom: 100,
+    left: Spacing.lg,
+    right: Spacing.lg,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  dossierBlur: {
+    backgroundColor: "rgba(20,20,20,0.7)",
+  },
+  dossierContent: {
+    padding: Spacing.lg,
+  },
+  dossierHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  dossierAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  dossierNameSection: {
+    flex: 1,
+    gap: 4,
+  },
+  dossierName: {
+    fontSize: 18,
+    fontWeight: "600",
     color: "#FFF",
-    marginTop: 130,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
+    letterSpacing: 0.3,
   },
-  dismissButton: {
+  dossierStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  dossierLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dossierStatusText: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 10,
+    color: "rgba(255,255,255,0.5)",
+    letterSpacing: 1,
+  },
+  dismissBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metricsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    marginTop: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  metricItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  metricLabel: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 9,
+    color: "rgba(255,255,255,0.4)",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#FFF",
+  },
+  metricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  summarySection: {
+    marginTop: 14,
+  },
+  sectionLabel: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 9,
+    color: "rgba(255,255,255,0.4)",
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  summaryText: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.8)",
+    lineHeight: 18,
+  },
+  affiliationsSection: {
+    marginTop: 14,
+  },
+  affiliationsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  affiliationTag: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  affiliationText: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 10,
+    color: "rgba(255,255,255,0.7)",
+    letterSpacing: 0.5,
+  },
+  interestsSection: {
+    marginTop: 14,
+  },
+  interestsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  interestTag: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  interestText: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.6)",
+  },
+  handshakeBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
+    gap: 8,
+    backgroundColor: "#FFF",
+    paddingVertical: 14,
+    borderRadius: 6,
+    marginTop: 16,
+  },
+  handshakeBtnText: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#000",
+    letterSpacing: 1,
   },
 });
