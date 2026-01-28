@@ -12,10 +12,10 @@ import * as Haptics from "expo-haptics";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
-import type { ARMoment } from "@/types";
+import type { Moment, ARMoment } from "@/types";
 
 interface MomentCardProps {
-  moment: ARMoment;
+  moment: Moment | ARMoment;
   onPress: () => void;
 }
 
@@ -42,21 +42,31 @@ export function MomentCard({ moment, onPress }: MomentCardProps) {
     transform: [{ scale: scale.value }],
   }));
 
-  const formatTimeAgo = (date: Date) => {
+  const formatTimeAgo = (dateInput: Date | string) => {
+    const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
     const minutes = Math.floor((Date.now() - date.getTime()) / 1000 / 60);
     if (minutes < 1) return "Just now";
     if (minutes < 60) return `${minutes}m ago`;
     return `${Math.floor(minutes / 60)}h ago`;
   };
 
-  const formatTimeLeft = (date: Date) => {
+  const formatTimeLeft = (dateInput: Date | string) => {
+    const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
     const minutes = Math.floor((date.getTime() - Date.now()) / 1000 / 60);
     if (minutes <= 0) return "Expiring";
     if (minutes < 60) return `${minutes}m left`;
     return `${Math.floor(minutes / 60)}h left`;
   };
 
-  const avatarImage = moment.creatorAvatar === 1
+  // Handle both Moment and ARMoment types
+  const creatorAvatar = "creatorAvatar" in moment ? moment.creatorAvatar : 1;
+  const createdAt = moment.createdAt;
+  const expiresAt = moment.expiresAt;
+  const watchCount = "views" in moment ? moment.views : ("watchCount" in moment ? moment.watchCount : 0);
+  const engagementScore = "engagement" in moment ? moment.engagement : ("engagementScore" in moment ? moment.engagementScore : 0);
+  const locationName = moment.location.name || "Unknown location";
+
+  const avatarImage = creatorAvatar === 1
     ? require("../../assets/images/avatar-preset-1.png")
     : require("../../assets/images/avatar-preset-2.png");
 
@@ -102,14 +112,14 @@ export function MomentCard({ moment, onPress }: MomentCardProps) {
                   {moment.creatorName}
                 </ThemedText>
                 <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                  {formatTimeAgo(moment.createdAt)}
+                  {formatTimeAgo(createdAt)}
                 </ThemedText>
               </View>
             </View>
             <View style={[styles.expiryBadge, { backgroundColor: `${theme.warning}20` }]}>
               <Feather name="clock" size={12} color={theme.warning} />
               <ThemedText type="caption" style={{ color: theme.warning, fontWeight: "500" }}>
-                {formatTimeLeft(moment.expiresAt)}
+                {formatTimeLeft(expiresAt)}
               </ThemedText>
             </View>
           </View>
@@ -117,7 +127,7 @@ export function MomentCard({ moment, onPress }: MomentCardProps) {
           <View style={styles.locationRow}>
             <Feather name="map-pin" size={14} color={theme.primary} />
             <ThemedText type="small" style={{ color: theme.textSecondary }}>
-              {moment.location.name}
+              {locationName}
             </ThemedText>
           </View>
 
@@ -125,13 +135,13 @@ export function MomentCard({ moment, onPress }: MomentCardProps) {
             <View style={styles.stat}>
               <Feather name="eye" size={14} color={theme.textSecondary} />
               <ThemedText type="caption" style={{ color: theme.textSecondary }}>
-                {moment.watchCount} views
+                {watchCount} views
               </ThemedText>
             </View>
             <View style={styles.stat}>
               <Feather name="trending-up" size={14} color={theme.success} />
               <ThemedText type="caption" style={{ color: theme.success }}>
-                {Math.round(moment.engagementScore * 100)}% engagement
+                {Math.round(engagementScore * 100)}% engagement
               </ThemedText>
             </View>
           </View>

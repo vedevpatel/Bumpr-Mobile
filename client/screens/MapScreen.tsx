@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, View, Platform, Linking, ScrollView } from "react-native";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { StyleSheet, View, Platform, Linking } from "react-native";
 import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect } from "@react-navigation/native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import { Pressable } from "react-native";
@@ -39,9 +40,11 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   const [locationName, setLocationName] = useState<string>("Your Area");
   const [spaceSummary, setSpaceSummary] = useState<SpaceSummary | null>(null);
 
-  useEffect(() => {
-    loadUserStatus();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadUserStatus();
+    }, [])
+  );
 
   useEffect(() => {
     if (permission?.granted) {
@@ -108,42 +111,38 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   if (!permission.granted) {
     return (
       <ThemedView style={styles.container}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.permissionContainer,
-            { paddingTop: insets.top + Spacing["4xl"] },
-          ]}
-        >
+        <View style={styles.permissionCentered}>
           <EmptyState
             image={require("../../assets/images/onboarding-context.png")}
             title="Enable Location"
             description="Bumpr uses your location to show nearby people and AR Moments. Your exact location is never shared."
           />
-          {permission.status === "denied" && !permission.canAskAgain ? (
-            Platform.OS !== "web" ? (
-              <Button
-                onPress={async () => {
-                  try {
-                    await Linking.openSettings();
-                  } catch (error) {
-                    // openSettings not supported
-                  }
-                }}
-                style={styles.permissionButton}
-              >
-                Open Settings
-              </Button>
+          <View style={styles.buttonContainer}>
+            {permission.status === "denied" && !permission.canAskAgain ? (
+              Platform.OS !== "web" ? (
+                <Button
+                  onPress={async () => {
+                    try {
+                      await Linking.openSettings();
+                    } catch (error) {
+                      // openSettings not supported
+                    }
+                  }}
+                >
+                  Open Settings
+                </Button>
+              ) : (
+                <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center" }}>
+                  Please enable location in Expo Go to use this feature.
+                </ThemedText>
+              )
             ) : (
-              <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center" }}>
-                Please enable location in Expo Go to use this feature.
-              </ThemedText>
-            )
-          ) : (
-            <Button onPress={requestPermission} style={styles.permissionButton}>
-              Enable Location
-            </Button>
-          )}
-        </ScrollView>
+              <Button onPress={requestPermission}>
+                Enable Location
+              </Button>
+            )}
+          </View>
+        </View>
       </ThemedView>
     );
   }
@@ -161,6 +160,7 @@ export default function MapScreen({ navigation }: MapScreenProps) {
         mapRef={mapRef}
         initialRegion={defaultRegion}
         isDark={isDark}
+        showsUserLocation={true}
       />
 
       <Animated.View
@@ -184,12 +184,14 @@ export default function MapScreen({ navigation }: MapScreenProps) {
         style={[styles.emptyStateContainer, { bottom: tabBarHeight + (showSummary && spaceSummary ? 220 : 100) }]}
       >
         <View style={[styles.emptyCard, { backgroundColor: theme.backgroundDefault }, Shadows.card]}>
-          <Feather name="users" size={32} color={theme.textSecondary} />
-          <ThemedText type="h4" style={{ marginTop: Spacing.md }}>
-            No one nearby yet
-          </ThemedText>
-          <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center" }}>
-            Be the first to connect in {locationName}
+          <View style={[styles.youBadge, { backgroundColor: `${theme.primary}15` }]}>
+            <Feather name="navigation" size={16} color={theme.primary} />
+            <ThemedText type="small" style={{ color: theme.primary, fontWeight: "600" }}>
+              You're here
+            </ThemedText>
+          </View>
+          <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center", marginTop: Spacing.sm }}>
+            No one else nearby yet. Be the first to connect in {locationName}!
           </ThemedText>
         </View>
       </Animated.View>
@@ -214,15 +216,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  permissionContainer: {
-    flexGrow: 1,
+  permissionCentered: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: Spacing["3xl"],
   },
-  permissionButton: {
+  buttonContainer: {
     marginTop: Spacing.xl,
-    paddingHorizontal: Spacing["3xl"],
+    width: "100%",
+    alignItems: "center",
   },
   topBar: {
     position: "absolute",
@@ -254,5 +257,13 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     alignItems: "center",
+  },
+  youBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
   },
 });

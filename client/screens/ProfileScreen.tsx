@@ -16,7 +16,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius, Shadows } from "@/constants/theme";
 import { storage } from "@/lib/storage";
 import { INTERESTS } from "@/data/mockData";
-import type { User, UserStatus, Interest } from "@/types";
+import type { User, UserStatus, Interest, ThemeMode } from "@/types";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -25,7 +25,7 @@ interface ProfileScreenProps {
 }
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
-  const { theme } = useTheme();
+  const { theme, themeMode, setTheme } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
@@ -39,6 +39,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   useFocusEffect(
     useCallback(() => {
       loadUser();
+      loadSettings();
     }, [])
   );
 
@@ -48,6 +49,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       setUser(userData);
       setSelectedInterests(userData.interests);
     }
+  };
+
+  const loadSettings = async () => {
+    const notifs = await storage.getNotificationsEnabled();
+    setNotificationsEnabled(notifs);
+    const privacy = await storage.getPrivacySettings();
+    setLocationSharing(privacy.showOnMap);
   };
 
   const handleStatusChange = async (status: UserStatus) => {
@@ -80,6 +88,24 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     }
   };
 
+  const handleThemeChange = async (mode: ThemeMode) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await setTheme(mode);
+  };
+
+  const handleNotificationsChange = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setNotificationsEnabled(value);
+    await storage.setNotificationsEnabled(value);
+  };
+
+  const handleLocationSharingChange = async (value: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLocationSharing(value);
+    const settings = await storage.getPrivacySettings();
+    await storage.savePrivacySettings({ ...settings, showOnMap: value });
+  };
+
   const handlePrivacyPress = () => {
     navigation.navigate("Privacy");
   };
@@ -99,7 +125,6 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           style: "destructive",
           onPress: async () => {
             await storage.clearAll();
-            // In a real app, this would navigate to login
           },
         },
       ]
@@ -205,6 +230,45 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         style={[styles.section, { backgroundColor: theme.backgroundDefault }, Shadows.card]}
       >
         <ThemedText type="h4" style={{ marginBottom: Spacing.md }}>
+          Appearance
+        </ThemedText>
+
+        <View style={styles.themeOptions}>
+          {(["light", "dark", "system"] as ThemeMode[]).map((mode) => (
+            <Pressable
+              key={mode}
+              style={[
+                styles.themeOption,
+                { backgroundColor: themeMode === mode ? `${theme.primary}15` : theme.backgroundSecondary },
+                themeMode === mode && { borderColor: theme.primary, borderWidth: 2 },
+              ]}
+              onPress={() => handleThemeChange(mode)}
+            >
+              <Feather
+                name={mode === "light" ? "sun" : mode === "dark" ? "moon" : "smartphone"}
+                size={20}
+                color={themeMode === mode ? theme.primary : theme.textSecondary}
+              />
+              <ThemedText
+                type="small"
+                style={{
+                  color: themeMode === mode ? theme.primary : theme.textSecondary,
+                  fontWeight: themeMode === mode ? "600" : "400",
+                  textTransform: "capitalize",
+                }}
+              >
+                {mode}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      </Animated.View>
+
+      <Animated.View
+        entering={FadeInDown.delay(400).duration(400)}
+        style={[styles.section, { backgroundColor: theme.backgroundDefault }, Shadows.card]}
+      >
+        <ThemedText type="h4" style={{ marginBottom: Spacing.md }}>
           Settings
         </ThemedText>
 
@@ -215,10 +279,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
           <Switch
             value={notificationsEnabled}
-            onValueChange={(value) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setNotificationsEnabled(value);
-            }}
+            onValueChange={handleNotificationsChange}
             trackColor={{ false: theme.border, true: `${theme.primary}50` }}
             thumbColor={notificationsEnabled ? theme.primary : theme.textSecondary}
           />
@@ -233,10 +294,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
           <Switch
             value={locationSharing}
-            onValueChange={(value) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setLocationSharing(value);
-            }}
+            onValueChange={handleLocationSharingChange}
             trackColor={{ false: theme.border, true: `${theme.primary}50` }}
             thumbColor={locationSharing ? theme.primary : theme.textSecondary}
           />
@@ -327,6 +385,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
+  },
+  themeOptions: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  themeOption: {
+    flex: 1,
+    alignItems: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
   },
   settingRow: {
     flexDirection: "row",

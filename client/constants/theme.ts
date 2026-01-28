@@ -1,23 +1,31 @@
 import { Platform } from "react-native";
 
-// Bumpr Design System Colors
+// Bumpr Design System Colors - Warm, Natural, Inviting
 export const BumprColors = {
-  primary: "#5B7C99",
-  secondary: "#7A9D54",
-  background: "#FAFBFC",
+  // Primary: Warm coral-peach tone
+  primary: "#E8785A",
+  // Secondary: Fresh sage green
+  secondary: "#7BB369",
+  // Accent: Warm gold
+  accent: "#F5B041",
+  // Background: Warm cream
+  background: "#FBF9F7",
+  // Surface: Pure white
   surface: "#FFFFFF",
-  textPrimary: "#1A2332",
-  textSecondary: "#6B7684",
-  statusOpen: "#7A9D54",
-  statusBusy: "#8E93A1",
-  arOverlay: "#5B7C99",
-  success: "#7A9D54",
-  warning: "#E8A758",
-  error: "#D85D5D",
+  // Text
+  textPrimary: "#2D3436",
+  textSecondary: "#7F8C8D",
+  // Status colors
+  statusOpen: "#7BB369",
+  statusBusy: "#95A5A6",
+  // System
+  success: "#7BB369",
+  warning: "#F5B041",
+  error: "#E74C3C",
 };
 
 const tintColorLight = BumprColors.primary;
-const tintColorDark = "#7A9DBB";
+const tintColorDark = "#F09B8B";
 
 export const Colors = {
   light: {
@@ -29,40 +37,42 @@ export const Colors = {
     link: BumprColors.primary,
     primary: BumprColors.primary,
     secondary: BumprColors.secondary,
+    accent: BumprColors.accent,
     backgroundRoot: BumprColors.background,
     backgroundDefault: BumprColors.surface,
-    backgroundSecondary: "#F0F2F5",
-    backgroundTertiary: "#E8EAED",
+    backgroundSecondary: "#F5F3F0",
+    backgroundTertiary: "#EBE8E4",
     statusOpen: BumprColors.statusOpen,
     statusBusy: BumprColors.statusBusy,
-    arOverlay: BumprColors.arOverlay,
+    arOverlay: BumprColors.primary,
     success: BumprColors.success,
     warning: BumprColors.warning,
     error: BumprColors.error,
-    border: "#E5E7EB",
-    cardShadow: "rgba(0, 0, 0, 0.08)",
+    border: "#E8E4E0",
+    cardShadow: "rgba(0, 0, 0, 0.06)",
   },
   dark: {
-    text: "#ECEDEE",
-    textSecondary: "#9BA1A6",
+    text: "#F5F5F5",
+    textSecondary: "#A0A0A0",
     buttonText: "#FFFFFF",
-    tabIconDefault: "#9BA1A6",
+    tabIconDefault: "#A0A0A0",
     tabIconSelected: tintColorDark,
     link: tintColorDark,
     primary: tintColorDark,
-    secondary: "#8FB366",
-    backgroundRoot: "#0F1115",
-    backgroundDefault: "#1A1D24",
-    backgroundSecondary: "#252930",
-    backgroundTertiary: "#31363F",
-    statusOpen: "#8FB366",
+    secondary: "#8FC97A",
+    accent: "#F7C16E",
+    backgroundRoot: "#1A1A1A",
+    backgroundDefault: "#242424",
+    backgroundSecondary: "#2E2E2E",
+    backgroundTertiary: "#383838",
+    statusOpen: "#8FC97A",
     statusBusy: "#6B7280",
-    arOverlay: "#7A9DBB",
-    success: "#8FB366",
-    warning: "#F0B864",
-    error: "#E06B6B",
-    border: "#31363F",
-    cardShadow: "rgba(0, 0, 0, 0.3)",
+    arOverlay: "#F09B8B",
+    success: "#8FC97A",
+    warning: "#F7C16E",
+    error: "#EF6B5B",
+    border: "#3A3A3A",
+    cardShadow: "rgba(0, 0, 0, 0.25)",
   },
 };
 
@@ -162,7 +172,7 @@ export const Shadows = {
   card: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -176,7 +186,7 @@ export const Shadows = {
   float: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.10,
     shadowRadius: 12,
     elevation: 6,
   },

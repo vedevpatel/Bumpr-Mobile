@@ -1,15 +1,17 @@
-export type UserStatus = "open" | "busy";
+export type UserStatus = "open" | "busy" | "invisible";
 
 export interface Interest {
   id: string;
   name: string;
-  category: string;
+  category?: string;
+  icon?: string;
 }
 
 export interface User {
   id: string;
   displayName: string;
   avatarPreset: number;
+  avatarUrl?: string;
   status: UserStatus;
   interests: Interest[];
   reputation: number;
@@ -27,6 +29,28 @@ export interface NearbyUser {
   distanceBand: "close" | "near" | "far";
   sharedInterests: string[];
   hasHandshake: boolean;
+}
+
+export interface Moment {
+  id: string;
+  creatorId: string;
+  creatorName: string;
+  creatorAvatar?: number;
+  creatorReputation?: number;
+  videoUri: string;
+  thumbnailUri?: string;
+  location: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+  };
+  createdAt: string;
+  expiresAt: string;
+  duration: number; // 5-15 seconds per spec
+  visibilityRadius: number; // meters, default 50 per spec
+  views: number;
+  completions: number;
+  engagement: number;
 }
 
 export interface ARMoment {
@@ -56,8 +80,12 @@ export interface Venue {
   distance: string;
   aiSummary: string;
   activeUsers: number;
-  rating: number;
+  rating?: string | number;
   imageUri?: string;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
 }
 
 export interface HandshakeRequest {
@@ -66,7 +94,7 @@ export interface HandshakeRequest {
   fromUserName: string;
   fromUserAvatar: number;
   fromUserInterests: Interest[];
-  status: "pending" | "accepted" | "declined";
+  status: "pending" | "accepted" | "declined" | "expired";
   createdAt: Date;
 }
 
@@ -77,3 +105,15 @@ export interface SpaceSummary {
   vibe: string;
   topInterests: string[];
 }
+
+export interface Notification {
+  id: string;
+  type: "handshake" | "moment" | "nearby" | "system";
+  title: string;
+  body: string;
+  timestamp: string;
+  read: boolean;
+  data?: Record<string, any>;
+}
+
+export type ThemeMode = "light" | "dark" | "system";

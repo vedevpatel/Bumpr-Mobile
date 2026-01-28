@@ -11,16 +11,17 @@ interface MapViewWrapperProps {
     longitudeDelta: number;
   };
   isDark: boolean;
+  showsUserLocation?: boolean;
 }
 
-export function MapViewWrapper({ mapRef, initialRegion, isDark }: MapViewWrapperProps) {
+export function MapViewWrapper({ mapRef, initialRegion, isDark, showsUserLocation = true }: MapViewWrapperProps) {
   return (
     <MapView
       ref={mapRef}
       style={StyleSheet.absoluteFill}
       provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
       initialRegion={initialRegion}
-      showsUserLocation
+      showsUserLocation={showsUserLocation}
       showsMyLocationButton={false}
       userInterfaceStyle={isDark ? "dark" : "light"}
     />

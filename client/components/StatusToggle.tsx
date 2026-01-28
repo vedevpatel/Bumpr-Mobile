@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { StyleSheet, Pressable, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -25,13 +25,17 @@ export function StatusToggle({ status, onToggle, compact = false }: StatusToggle
   const { theme } = useTheme();
   const togglePosition = useSharedValue(status === "open" ? 0 : 1);
 
-  const handleToggle = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const newStatus = status === "open" ? "busy" : "open";
-    togglePosition.value = withSpring(newStatus === "open" ? 0 : 1, {
+  // Sync animation with external status changes
+  useEffect(() => {
+    togglePosition.value = withSpring(status === "open" ? 0 : 1, {
       damping: 15,
       stiffness: 150,
     });
+  }, [status]);
+
+  const handleToggle = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const newStatus = status === "open" ? "busy" : "open";
     onToggle(newStatus);
   };
 
