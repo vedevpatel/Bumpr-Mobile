@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, StyleSheet, Pressable, Platform, Alert, TextInput } from "react-native";
+import { View, StyleSheet, Pressable, Platform, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
 import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
-import Slider from "@react-native-community/slider";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -284,34 +283,46 @@ export default function CreateMomentScreen({ navigation }: CreateMomentScreenPro
                   <ThemedText type="small" style={{ color: "#FFF" }}>
                     Expires in: {expiryHours}h
                   </ThemedText>
-                  <Slider
-                    style={{ width: "100%", height: 40 }}
-                    minimumValue={1}
-                    maximumValue={48}
-                    step={1}
-                    value={expiryHours}
-                    onValueChange={setExpiryHours}
-                    minimumTrackTintColor={theme.primary}
-                    maximumTrackTintColor="rgba(255,255,255,0.3)"
-                    thumbTintColor={theme.primary}
-                  />
+                  <View style={styles.stepperRow}>
+                    <Pressable
+                      style={[styles.stepperButton, { backgroundColor: "rgba(255,255,255,0.2)" }]}
+                      onPress={() => setExpiryHours(Math.max(1, expiryHours - 6))}
+                    >
+                      <Feather name="minus" size={18} color="#FFF" />
+                    </Pressable>
+                    <View style={[styles.stepperTrack, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+                      <View style={[styles.stepperFill, { width: `${(expiryHours / 48) * 100}%`, backgroundColor: theme.primary }]} />
+                    </View>
+                    <Pressable
+                      style={[styles.stepperButton, { backgroundColor: "rgba(255,255,255,0.2)" }]}
+                      onPress={() => setExpiryHours(Math.min(48, expiryHours + 6))}
+                    >
+                      <Feather name="plus" size={18} color="#FFF" />
+                    </Pressable>
+                  </View>
                 </View>
                 
                 <View style={styles.settingItem}>
                   <ThemedText type="small" style={{ color: "#FFF" }}>
                     Visible within: {visibilityRadius}m
                   </ThemedText>
-                  <Slider
-                    style={{ width: "100%", height: 40 }}
-                    minimumValue={10}
-                    maximumValue={100}
-                    step={10}
-                    value={visibilityRadius}
-                    onValueChange={setVisibilityRadius}
-                    minimumTrackTintColor={theme.primary}
-                    maximumTrackTintColor="rgba(255,255,255,0.3)"
-                    thumbTintColor={theme.primary}
-                  />
+                  <View style={styles.stepperRow}>
+                    <Pressable
+                      style={[styles.stepperButton, { backgroundColor: "rgba(255,255,255,0.2)" }]}
+                      onPress={() => setVisibilityRadius(Math.max(10, visibilityRadius - 10))}
+                    >
+                      <Feather name="minus" size={18} color="#FFF" />
+                    </Pressable>
+                    <View style={[styles.stepperTrack, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+                      <View style={[styles.stepperFill, { width: `${((visibilityRadius - 10) / 90) * 100}%`, backgroundColor: theme.primary }]} />
+                    </View>
+                    <Pressable
+                      style={[styles.stepperButton, { backgroundColor: "rgba(255,255,255,0.2)" }]}
+                      onPress={() => setVisibilityRadius(Math.min(100, visibilityRadius + 10))}
+                    >
+                      <Feather name="plus" size={18} color="#FFF" />
+                    </Pressable>
+                  </View>
                 </View>
               </Animated.View>
             )}
@@ -468,5 +479,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing["2xl"],
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
+  },
+  stepperRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  stepperButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepperTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  stepperFill: {
+    height: "100%",
+    borderRadius: 3,
   },
 });
