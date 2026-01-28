@@ -34,12 +34,21 @@ Path aliases configured:
 
 ### Backend (Express)
 
-Simple Express server handling API routes:
+Production-ready Express server with PostgreSQL persistence:
 
-- **Routes**: Defined in `server/routes.ts` with venue generation based on user location
-- **Storage**: Currently using in-memory storage (`MemStorage` class) for user data
-- **Database Schema**: Drizzle ORM schema defined in `shared/schema.ts` with PostgreSQL dialect configured
+- **Routes**: Defined in `server/routes.ts` with venue discovery, handshake management, moments, and reputation tracking
+- **Storage**: PostgreSQL database via Drizzle ORM (`server/storage.ts`) with full CRUD operations for users, profiles, handshakes, moments, and push tokens
+- **Database Schema**: Drizzle ORM schema defined in `shared/schema.ts` with tables for users, profiles, handshakes, moments, reputation_history, and push_tokens
+- **Real-time Venues**: OpenStreetMap Overpass API integration for real nearby venue data based on GPS coordinates
 - **CORS**: Dynamic origin handling for Replit domains and localhost development
+
+### API Endpoints
+
+- **Users/Profiles**: POST/GET/PATCH `/api/profiles`, `/api/users/nearby` for location-based user discovery
+- **Handshakes**: POST/GET `/api/handshakes`, `/api/handshakes/pending/:userId`, `/api/handshakes/sent/:userId`, `/api/handshakes/connections/:userId`
+- **Moments**: POST/GET `/api/moments`, `/api/moments/nearby`, `/api/moments/:id/view`
+- **Reputation**: GET `/api/reputation/:userId` with history tracking
+- **Push Tokens**: POST/DELETE `/api/push-tokens` for notification management
 
 ### Shared Code
 
@@ -70,6 +79,8 @@ Following guidelines in `design_guidelines.md`:
 - **expo-haptics**: Tactile feedback
 - **expo-blur**: iOS blur effects for navigation
 - **expo-linear-gradient**: Gradient overlays
+- **expo-notifications**: Push notifications for handshake requests and moment interactions
+- **expo-device**: Device detection for notification setup
 
 ### Data & State
 - **@tanstack/react-query**: Server state management and caching
