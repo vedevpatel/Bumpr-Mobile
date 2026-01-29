@@ -1,31 +1,32 @@
 import { Platform } from "react-native";
 
-// Bumpr Design System Colors - Warm, Natural, Inviting
+// Bumpr Design System Colors - Warm Cream Minimal Aesthetic
+// Inspired by modern dating/social apps with soft, inviting tones
 export const BumprColors = {
-  // Primary: Warm coral-peach tone
-  primary: "#E8785A",
-  // Secondary: Fresh sage green
-  secondary: "#7BB369",
+  // Primary: Warm terracotta/rust (for accents and highlights)
+  primary: "#C4846C",
+  // Secondary: Soft sage for positive states
+  secondary: "#8FA67A",
   // Accent: Warm gold
-  accent: "#F5B041",
-  // Background: Warm cream
-  background: "#FBF9F7",
-  // Surface: Pure white
-  surface: "#FFFFFF",
+  accent: "#D4A574",
+  // Background: Warm cream/linen
+  background: "#F5EDE4",
+  // Surface: Lighter cream for cards
+  surface: "#FAF7F3",
   // Text
-  textPrimary: "#2D3436",
-  textSecondary: "#7F8C8D",
+  textPrimary: "#2C2825",
+  textSecondary: "#7A756F",
   // Status colors
-  statusOpen: "#7BB369",
-  statusBusy: "#95A5A6",
+  statusOpen: "#8FA67A",
+  statusBusy: "#9A958E",
   // System
-  success: "#7BB369",
-  warning: "#F5B041",
-  error: "#E74C3C",
+  success: "#8FA67A",
+  warning: "#D4A574",
+  error: "#C97B7B",
 };
 
 const tintColorLight = BumprColors.primary;
-const tintColorDark = "#F09B8B";
+const tintColorDark = "#D4A08A";
 
 export const Colors = {
   light: {
@@ -40,39 +41,39 @@ export const Colors = {
     accent: BumprColors.accent,
     backgroundRoot: BumprColors.background,
     backgroundDefault: BumprColors.surface,
-    backgroundSecondary: "#F5F3F0",
-    backgroundTertiary: "#EBE8E4",
+    backgroundSecondary: "#EFE8DF",
+    backgroundTertiary: "#E8E0D6",
     statusOpen: BumprColors.statusOpen,
     statusBusy: BumprColors.statusBusy,
     arOverlay: BumprColors.primary,
     success: BumprColors.success,
     warning: BumprColors.warning,
     error: BumprColors.error,
-    border: "#E8E4E0",
-    cardShadow: "rgba(0, 0, 0, 0.06)",
+    border: "#E5DED5",
+    cardShadow: "rgba(44, 40, 37, 0.06)",
   },
   dark: {
-    text: "#F5F5F5",
-    textSecondary: "#A0A0A0",
+    text: "#F5F2EF",
+    textSecondary: "#A8A29D",
     buttonText: "#FFFFFF",
-    tabIconDefault: "#A0A0A0",
+    tabIconDefault: "#A8A29D",
     tabIconSelected: tintColorDark,
     link: tintColorDark,
     primary: tintColorDark,
-    secondary: "#8FC97A",
-    accent: "#F7C16E",
-    backgroundRoot: "#1A1A1A",
-    backgroundDefault: "#242424",
-    backgroundSecondary: "#2E2E2E",
-    backgroundTertiary: "#383838",
-    statusOpen: "#8FC97A",
-    statusBusy: "#6B7280",
-    arOverlay: "#F09B8B",
-    success: "#8FC97A",
-    warning: "#F7C16E",
-    error: "#EF6B5B",
-    border: "#3A3A3A",
-    cardShadow: "rgba(0, 0, 0, 0.25)",
+    secondary: "#9FB88A",
+    accent: "#DEB68A",
+    backgroundRoot: "#1C1A18",
+    backgroundDefault: "#252320",
+    backgroundSecondary: "#2F2C28",
+    backgroundTertiary: "#3A3632",
+    statusOpen: "#9FB88A",
+    statusBusy: "#6E6A65",
+    arOverlay: "#D4A08A",
+    success: "#9FB88A",
+    warning: "#DEB68A",
+    error: "#D4908A",
+    border: "#3D3935",
+    cardShadow: "rgba(0, 0, 0, 0.3)",
   },
 };
 
