@@ -1,0 +1,38 @@
+{
+    "cli": {
+        "version": ">= 10.0.0"
+    },
+    "build": {
+        "development": {
+            "developmentClient": true,
+            "distribution": "internal",
+            "ios": {
+                "simulator": true
+            },
+            "env": {
+                "EXPO_PUBLIC_API_URL": "http://localhost:5000"
+            }
+        },
+        "development-device": {
+            "developmentClient": true,
+            "distribution": "internal",
+            "env": {
+                "EXPO_PUBLIC_API_URL": "PUT_YOUR_COMPUTER_IP_HERE:5000"
+            }
+        },
+        "preview": {
+            "distribution": "internal",
+            "env": {
+                "EXPO_PUBLIC_API_URL": "https://bumpr-api.onrender.com"
+            }
+        },
+        "production": {
+            "env": {
+                "EXPO_PUBLIC_API_URL": "https://bumpr-api.onrender.com"
+            }
+        }
+    },
+    "submit": {
+        "production": {}
+    }
+}

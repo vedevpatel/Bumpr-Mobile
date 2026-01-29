@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Pressable, Platform, Image, Linking, Dimensions, Alert } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { View, StyleSheet, Pressable, Platform, Image, Dimensions, Alert } from "react-native";
+import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from "react-native-vision-camera";
+import { scanFaces, type Face } from "react-native-vision-camera-face-detector";
+import { runOnJS } from "react-native-worklets-core";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
-import Animated, { 
-  useAnimatedStyle, 
-  useSharedValue, 
-  withTiming, 
+import * as Location from "expo-location";
+import { useQuery } from "@tanstack/react-query";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
   withDelay,
   Easing,
 } from "react-native-reanimated";
@@ -14,9 +18,9 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, BorderRadius } from "@/constants/theme";
+import { Spacing } from "@/constants/theme";
+import { getQueryFn } from "@/lib/query-client";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -32,70 +36,63 @@ interface NearbyUser {
   affiliations?: string[];
 }
 
-const DEMO_PROFILES: NearbyUser[] = [
-  {
-    id: "demo-1",
-    name: "Alex Chen",
-    avatarUrl: undefined,
-    cliqueScore: 87,
-    distance: 3,
-    status: "open",
-    bio: "Tech enthusiast & coffee lover. Always up for interesting conversations!",
-    interests: ["Photography", "AI", "Hiking", "Coffee"],
-    affiliations: ["Stanford '19", "Sequoia Capital", "YC W21"],
-  },
-  {
-    id: "demo-2", 
-    name: "Jordan Rivera",
-    avatarUrl: undefined,
-    cliqueScore: 92,
-    distance: 5,
-    status: "open",
-    bio: "Creative director by day, musician by night. Let's collaborate!",
-    interests: ["Music", "Design", "Art", "Travel"],
-    affiliations: ["RISD", "Apple Design", "Grammy Nom."],
-  },
-  {
-    id: "demo-3",
-    name: "Sam Taylor",
-    avatarUrl: undefined,
-    cliqueScore: 78,
-    distance: 8,
-    status: "open", 
-    bio: "Startup founder passionate about sustainability and innovation.",
-    interests: ["Startups", "Climate", "Running", "Books"],
-    affiliations: ["MIT", "Techstars", "Forbes 30u30"],
-  },
-];
-
 const RESEARCH_PHASES = [
-  "Querying social indices...",
-  "Aggregating affiliations...",
-  "Cross-referencing network nodes...",
-  "Compiling behavioral patterns...",
-  "Analyzing connection graph...",
-  "Resolving identity vectors...",
+  "Acquiring biometric lock...",
+  "Querying Bumpr Index...",
+  "Analyzing social graph...",
+  "Retrieving public dossier...",
 ];
 
 export default function ARScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const cameraRef = useRef<CameraView>(null);
 
-  const [permission, requestPermission] = useCameraPermissions();
-  const [cameraReady, setCameraReady] = useState(false);
+  const device = useCameraDevice('back');
+  const { hasPermission, requestPermission } = useCameraPermission();
+
   const [scanning, setScanning] = useState(false);
   const [detectedUser, setDetectedUser] = useState<NearbyUser | null>(null);
-  const [currentDemoIndex, setCurrentDemoIndex] = useState(0);
   const [researchPhase, setResearchPhase] = useState(0);
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const phaseIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastScanTime = useRef<number>(0);
 
+  // Animation Values
   const focusRingOpacity = useSharedValue(0);
   const researchTextOpacity = useSharedValue(0);
   const dossierOpacity = useSharedValue(0);
   const dossierTranslateY = useSharedValue(20);
   const scanButtonOpacity = useSharedValue(1);
+
+  // 1. Get Location for API
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({});
+        setLocation(loc);
+      }
+    })();
+  }, []);
+
+  // 2. Query Real Backend
+  const { data: nearbyUsers } = useQuery<NearbyUser[]>({
+    queryKey: ["users/nearby", {
+      lat: location?.coords.latitude,
+      lng: location?.coords.longitude
+    }],
+    queryFn: () => getQueryFn({ on401: "returnNull" })({
+      queryKey: [`users/nearby?lat=${location?.coords.latitude || 0}&lng=${location?.coords.longitude || 0}`]
+    } as any),
+    enabled: !!location,
+  });
+
+  // Permissions check
+  useEffect(() => {
+    if (!hasPermission) requestPermission();
+  }, [hasPermission]);
 
   useEffect(() => {
     return () => {
@@ -104,56 +101,70 @@ export default function ARScreen() {
     };
   }, []);
 
-  const handleScan = () => {
+  // Triggered when a face is "locked"
+  const performScan = (face: Face) => {
     if (scanning || detectedUser) return;
-    
+
+    // Throttle scans
+    const now = Date.now();
+    if (now - lastScanTime.current < 2000) return;
+    lastScanTime.current = now;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setScanning(true);
     setResearchPhase(0);
-    
+
+    // UI Animations
     scanButtonOpacity.value = withTiming(0, { duration: 200 });
-    focusRingOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
+    focusRingOpacity.value = withTiming(1, { duration: 400 });
     researchTextOpacity.value = withDelay(300, withTiming(1, { duration: 300 }));
-    
+
+    // Cycle "Research" text
     let phase = 0;
     phaseIntervalRef.current = setInterval(() => {
       phase = (phase + 1) % RESEARCH_PHASES.length;
       setResearchPhase(phase);
-    }, 400);
-    
-    const delay = 2000 + Math.random() * 800;
-    
+    }, 600);
+
+    // Simulate processing time, then result
     scanTimeoutRef.current = setTimeout(() => {
       if (phaseIntervalRef.current) clearInterval(phaseIntervalRef.current);
-      
-      const profile = DEMO_PROFILES[currentDemoIndex % DEMO_PROFILES.length];
-      setCurrentDemoIndex(prev => prev + 1);
-      
+
+      // Select the "closest" user from API result (Simulating identification)
+      const match = nearbyUsers && nearbyUsers.length > 0 ? nearbyUsers[0] : null;
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
+
       focusRingOpacity.value = withTiming(0, { duration: 200 });
       researchTextOpacity.value = withTiming(0, { duration: 150 });
-      
-      setTimeout(() => {
-        setDetectedUser(profile);
+
+      if (match) {
+        handleUserResolved(match);
+      } else {
+        // No user found nearby
         setScanning(false);
-        
-        dossierOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
-        dossierTranslateY.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
-      }, 100);
-    }, delay);
+        scanButtonOpacity.value = withTiming(1);
+        // Optional: Alert user or just reset silently
+        // Alert.alert("No Match", "No registered user found for this biometric signature.");
+      }
+
+    }, 2000); // 2 seconds of "Scanning" drama
   };
 
-  const handleCameraReady = () => {
-    setCameraReady(true);
+  const handleUserResolved = (profile: NearbyUser) => {
+    setDetectedUser(profile);
+    setScanning(false);
+
+    setTimeout(() => {
+      dossierOpacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) });
+      dossierTranslateY.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) });
+    }, 100);
   };
 
   const handleDismiss = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
     dossierOpacity.value = withTiming(0, { duration: 150 });
     dossierTranslateY.value = withTiming(20, { duration: 150 });
-    
     setTimeout(() => {
       setDetectedUser(null);
       scanButtonOpacity.value = withTiming(1, { duration: 300 });
@@ -162,544 +173,153 @@ export default function ARScreen() {
 
   const handleSendHandshake = () => {
     if (!detectedUser) return;
-    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
-    Alert.alert(
-      "Handshake Initiated",
-      `Connection request transmitted to ${detectedUser.name}.`,
-      [{ text: "Confirm", onPress: handleDismiss }]
-    );
+    Alert.alert("Connection Sent", `Handshake request transmitted to ${detectedUser.name}.`, [
+      { text: "Done", onPress: handleDismiss }
+    ]);
   };
 
-  const focusRingStyle = useAnimatedStyle(() => ({
-    opacity: focusRingOpacity.value,
-  }));
+  // 3. Real Frame Processor with MLKit
+  const frameProcessor = useFrameProcessor((frame) => {
+    'worklet';
+    const faces = scanFaces(frame);
 
-  const researchTextStyle = useAnimatedStyle(() => ({
-    opacity: researchTextOpacity.value,
-  }));
+    if (faces.length > 0) {
+      // Logic: If face is big enough and centered
+      const face = faces[0];
+      // Simple heuristic: bounds should be reasonably large to ensure they are close
+      // Note: check library docs for exact bounds structure, assuming { width, height, x, y }
+      if (face.bounds.width > 80) {
+        runOnJS(performScan)(face);
+      }
+    }
+  }, [nearbyUsers]); // Add dependencies if needed for logic inside (though runOnJS handles external state)
 
+  // Styles & Animations
+  const focusRingStyle = useAnimatedStyle(() => ({ opacity: focusRingOpacity.value }));
+  const researchTextStyle = useAnimatedStyle(() => ({ opacity: researchTextOpacity.value }));
   const dossierStyle = useAnimatedStyle(() => ({
     opacity: dossierOpacity.value,
-    transform: [{ translateY: dossierTranslateY.value }],
+    transform: [{ translateY: dossierTranslateY.value }]
   }));
+  const scanButtonStyle = useAnimatedStyle(() => ({ opacity: scanButtonOpacity.value }));
 
-  const scanButtonStyle = useAnimatedStyle(() => ({
-    opacity: scanButtonOpacity.value,
-  }));
-
-  if (!permission) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-        <View style={styles.centered}>
-          <ThemedText>Loading camera...</ThemedText>
-        </View>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-        <View style={[styles.centered, { paddingHorizontal: Spacing.xl }]}>
-          <View style={[styles.iconContainer, { backgroundColor: `${theme.primary}15` }]}>
-            <Feather name="camera" size={48} color={theme.primary} />
-          </View>
-          <ThemedText type="h3" style={{ textAlign: "center", marginTop: Spacing.xl }}>
-            Camera Access Required
-          </ThemedText>
-          <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center", marginTop: Spacing.sm }}>
-            Enable camera to scan for people nearby and see their profiles in AR
-          </ThemedText>
-          <View style={{ marginTop: Spacing.xl, width: "100%" }}>
-            {permission.status === "denied" && !permission.canAskAgain ? (
-              Platform.OS !== "web" ? (
-                <Button
-                  onPress={async () => {
-                    try {
-                      await Linking.openSettings();
-                    } catch (error) {}
-                  }}
-                >
-                  Open Settings
-                </Button>
-              ) : (
-                <ThemedText type="body" style={{ color: theme.textSecondary, textAlign: "center" }}>
-                  Run in Expo Go to use this feature
-                </ThemedText>
-              )
-            ) : (
-              <Button onPress={requestPermission}>
-                Enable Camera
-              </Button>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  }
+  // Render Loading / Permission States
+  if (!hasPermission) return <View style={[styles.container, styles.centered]}><ThemedText>Requesting Permissions...</ThemedText></View>;
+  if (!device) return <View style={[styles.container, styles.centered]}><ThemedText>No Camera Device</ThemedText></View>;
 
   return (
     <View style={styles.container}>
-      <CameraView
-        ref={cameraRef}
+      <Camera
         style={StyleSheet.absoluteFill}
-        facing="back"
-        onCameraReady={handleCameraReady}
+        device={device}
+        isActive={true}
+        frameProcessor={frameProcessor}
+        pixelFormat="yuv" // Required for processing
       />
 
-      {/* Top status indicator */}
+      {/* Status Bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + Spacing.md }]}>
         <View style={styles.statusIndicator}>
-          <View style={[styles.statusDotLive, { backgroundColor: scanning ? "#00FF88" : detectedUser ? "#00FF88" : "#666" }]} />
+          <View style={[styles.statusDotLive, { backgroundColor: scanning || detectedUser ? "#00FF88" : "#FF6B6B" }]} />
           <ThemedText style={styles.statusText}>
-            {scanning ? "SCANNING" : detectedUser ? "LOCKED" : "READY"}
+            {scanning ? "ANALYZING" : detectedUser ? "LOCKED" : "SEARCHING"}
           </ThemedText>
         </View>
       </View>
 
-      {/* Focus ring and research phase */}
-      {scanning ? (
+      {/* AR Overlays */}
+      {scanning && (
         <View style={styles.scanOverlay} pointerEvents="none">
           <Animated.View style={[styles.focusRingContainer, focusRingStyle]}>
             <View style={styles.focusRing} />
-            <View style={styles.focusCornerTL} />
-            <View style={styles.focusCornerTR} />
-            <View style={styles.focusCornerBL} />
-            <View style={styles.focusCornerBR} />
+            {/* Corners */}
+            <View style={[styles.corner, styles.tl]} />
+            <View style={[styles.corner, styles.tr]} />
+            <View style={[styles.corner, styles.bl]} />
+            <View style={[styles.corner, styles.br]} />
           </Animated.View>
-          
+
           <Animated.View style={[styles.researchContainer, researchTextStyle]}>
-            <ThemedText style={styles.researchText}>
-              {RESEARCH_PHASES[researchPhase]}
-            </ThemedText>
+            <ThemedText style={styles.researchText}>{RESEARCH_PHASES[researchPhase]}</ThemedText>
           </Animated.View>
         </View>
-      ) : null}
+      )}
 
-      {/* Scan Button - only show when not scanning and no profile detected */}
-      {!scanning && !detectedUser && cameraReady ? (
+      {/* Manual Trigger (Fallback) */}
+      {!scanning && !detectedUser && (
         <Animated.View style={[styles.scanButtonContainer, { bottom: insets.bottom + 100 }, scanButtonStyle]}>
-          <Pressable style={styles.scanButton} onPress={handleScan}>
-            <View style={styles.scanButtonInner}>
-              <Feather name="aperture" size={28} color="#FFF" />
-            </View>
-            <ThemedText style={styles.scanButtonLabel}>SCAN</ThemedText>
-          </Pressable>
+          {/* Optional manual scan button if facial detection is flaky */}
         </Animated.View>
-      ) : null}
+      )}
 
-      {/* Dossier Card */}
-      {detectedUser ? (
-        <Animated.View style={[styles.dossierContainer, { bottom: insets.bottom + 100 }, dossierStyle]}>
-          <BlurView intensity={25} tint="dark" style={styles.dossierBlur}>
+      {/* Profile Card */}
+      {detectedUser && (
+        <Animated.View style={[styles.dossierContainer, { bottom: insets.bottom + 40 }, dossierStyle]}>
+          <BlurView intensity={40} tint="dark" style={styles.dossierBlur}>
             <View style={styles.dossierContent}>
-              {/* Header with avatar and name */}
               <View style={styles.dossierHeader}>
-                <Image
-                  source={
-                    detectedUser.avatarUrl
-                      ? { uri: detectedUser.avatarUrl }
-                      : require("../../assets/images/avatar-preset-1.png")
-                  }
-                  style={styles.dossierAvatar}
-                />
-                <View style={styles.dossierNameSection}>
-                  <ThemedText style={styles.dossierName}>
-                    {detectedUser.name}
-                  </ThemedText>
-                  <View style={styles.dossierStatusRow}>
-                    <View style={[styles.dossierLiveDot, { backgroundColor: detectedUser.status === "open" ? "#00FF88" : "#FF6B6B" }]} />
-                    <ThemedText style={styles.dossierStatusText}>
-                      {detectedUser.status === "open" ? "OPEN" : "BUSY"}
-                    </ThemedText>
-                  </View>
+                <Image source={detectedUser.avatarUrl ? { uri: detectedUser.avatarUrl } : require("../../assets/images/avatar-preset-1.png")} style={styles.dossierAvatar} />
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.dossierName}>{detectedUser.name}</ThemedText>
+                  <ThemedText style={styles.dossierStatusText}>{detectedUser.bio || "No public bio"}</ThemedText>
                 </View>
-                <Pressable style={styles.dismissBtn} onPress={handleDismiss}>
-                  <Feather name="x" size={18} color="rgba(255,255,255,0.6)" />
-                </Pressable>
+                <Pressable onPress={handleDismiss} style={{ padding: 8 }}><Feather name="x" size={20} color="white" /></Pressable>
               </View>
 
-              {/* Metrics row */}
               <View style={styles.metricsRow}>
                 <View style={styles.metricItem}>
-                  <ThemedText style={styles.metricLabel}>PROXIMITY</ThemedText>
+                  <ThemedText style={styles.metricLabel}>DIST</ThemedText>
                   <ThemedText style={styles.metricValue}>{detectedUser.distance}m</ThemedText>
                 </View>
                 <View style={styles.metricDivider} />
                 <View style={styles.metricItem}>
-                  <ThemedText style={styles.metricLabel}>CLIQUE</ThemedText>
+                  <ThemedText style={styles.metricLabel}>SCORE</ThemedText>
                   <ThemedText style={styles.metricValue}>{detectedUser.cliqueScore}</ThemedText>
-                </View>
-                <View style={styles.metricDivider} />
-                <View style={styles.metricItem}>
-                  <ThemedText style={styles.metricLabel}>NODES</ThemedText>
-                  <ThemedText style={styles.metricValue}>{detectedUser.affiliations?.length || 0}</ThemedText>
                 </View>
               </View>
 
-              {/* Source Summary (Bio) */}
-              {detectedUser.bio ? (
-                <View style={styles.summarySection}>
-                  <ThemedText style={styles.sectionLabel}>SOURCE SUMMARY</ThemedText>
-                  <ThemedText style={styles.summaryText}>
-                    {detectedUser.bio}
-                  </ThemedText>
-                </View>
-              ) : null}
-
-              {/* Affiliations */}
-              {detectedUser.affiliations && detectedUser.affiliations.length > 0 ? (
-                <View style={styles.affiliationsSection}>
-                  <ThemedText style={styles.sectionLabel}>AFFILIATIONS</ThemedText>
-                  <View style={styles.affiliationsList}>
-                    {detectedUser.affiliations.map((affiliation, index) => (
-                      <View key={index} style={styles.affiliationTag}>
-                        <ThemedText style={styles.affiliationText}>{affiliation}</ThemedText>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-
-              {/* Interests */}
-              {detectedUser.interests && detectedUser.interests.length > 0 ? (
-                <View style={styles.interestsSection}>
-                  <ThemedText style={styles.sectionLabel}>INTERESTS</ThemedText>
-                  <View style={styles.interestsList}>
-                    {detectedUser.interests.slice(0, 4).map((interest, index) => (
-                      <View key={index} style={styles.interestTag}>
-                        <ThemedText style={styles.interestText}>{interest}</ThemedText>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-
-              {/* Action button */}
               <Pressable style={styles.handshakeBtn} onPress={handleSendHandshake}>
-                <Feather name="zap" size={18} color="#000" />
-                <ThemedText style={styles.handshakeBtnText}>INITIATE HANDSHAKE</ThemedText>
+                <ThemedText style={styles.handshakeBtnText}>CONNECT</ThemedText>
               </Pressable>
             </View>
           </BlurView>
         </Animated.View>
-      ) : null}
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  topBar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: Spacing.lg,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  statusIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  statusDotLive: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 11,
-    color: "rgba(255,255,255,0.7)",
-    letterSpacing: 2,
-  },
-  scanOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  focusRingContainer: {
-    width: 200,
-    height: 200,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  focusRing: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.4)",
-  },
-  focusCornerTL: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: 24,
-    height: 24,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-    borderColor: "#FFF",
-  },
-  focusCornerTR: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderTopWidth: 2,
-    borderRightWidth: 2,
-    borderColor: "#FFF",
-  },
-  focusCornerBL: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    width: 24,
-    height: 24,
-    borderBottomWidth: 2,
-    borderLeftWidth: 2,
-    borderColor: "#FFF",
-  },
-  focusCornerBR: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 24,
-    height: 24,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-    borderColor: "#FFF",
-  },
-  researchContainer: {
-    position: "absolute",
-    top: SCREEN_HEIGHT / 2 + 120,
-    alignItems: "center",
-  },
-  researchText: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 12,
-    color: "rgba(255,255,255,0.6)",
-    letterSpacing: 0.5,
-  },
-  scanButtonContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 20,
-  },
-  scanButton: {
-    alignItems: "center",
-    gap: 8,
-  },
-  scanButtonInner: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.4)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scanButtonLabel: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 11,
-    color: "rgba(255,255,255,0.7)",
-    letterSpacing: 2,
-  },
-  dossierContainer: {
-    position: "absolute",
-    left: Spacing.lg,
-    right: Spacing.lg,
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-  dossierBlur: {
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  dossierContent: {
-    padding: Spacing.lg,
-  },
-  dossierHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  dossierAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-  },
-  dossierNameSection: {
-    flex: 1,
-    gap: 4,
-  },
-  dossierName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#FFF",
-    letterSpacing: 0.3,
-  },
-  dossierStatusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  dossierLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  dossierStatusText: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 10,
-    color: "rgba(255,255,255,0.5)",
-    letterSpacing: 1,
-  },
-  dismissBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  metricsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    marginTop: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  metricItem: {
-    alignItems: "center",
-    flex: 1,
-  },
-  metricLabel: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 9,
-    color: "rgba(255,255,255,0.4)",
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  metricValue: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#FFF",
-  },
-  metricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: "rgba(255,255,255,0.1)",
-  },
-  summarySection: {
-    marginTop: 14,
-  },
-  sectionLabel: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 9,
-    color: "rgba(255,255,255,0.4)",
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  summaryText: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.8)",
-    lineHeight: 18,
-  },
-  affiliationsSection: {
-    marginTop: 14,
-  },
-  affiliationsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  affiliationTag: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  affiliationText: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 10,
-    color: "rgba(255,255,255,0.7)",
-    letterSpacing: 0.5,
-  },
-  interestsSection: {
-    marginTop: 14,
-  },
-  interestsList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  interestTag: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 4,
-  },
-  interestText: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.6)",
-  },
-  handshakeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#FFF",
-    paddingVertical: 14,
-    borderRadius: 6,
-    marginTop: 16,
-  },
-  handshakeBtnText: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#000",
-    letterSpacing: 1,
-  },
+  container: { flex: 1, backgroundColor: "#000" },
+  centered: { alignItems: "center", justifyContent: "center" },
+  topBar: { position: "absolute", top: 0, left: 0, right: 0, alignItems: "center", zIndex: 10 },
+  statusIndicator: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  statusDotLive: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 12, color: "white", fontWeight: "700", opacity: 0.9 },
+  scanOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  focusRingContainer: { width: 250, height: 250, alignItems: "center", justifyContent: "center" },
+  focusRing: { width: 220, height: 220, borderRadius: 110, borderWidth: 1, borderColor: "rgba(0,255,136,0.3)" },
+  corner: { position: "absolute", width: 20, height: 20, borderColor: "#00FF88", borderWidth: 2 },
+  tl: { top: 0, left: 0, borderBottomWidth: 0, borderRightWidth: 0 },
+  tr: { top: 0, right: 0, borderBottomWidth: 0, borderLeftWidth: 0 },
+  bl: { bottom: 0, left: 0, borderTopWidth: 0, borderRightWidth: 0 },
+  br: { bottom: 0, right: 0, borderTopWidth: 0, borderLeftWidth: 0 },
+  researchContainer: { marginTop: 32 },
+  researchText: { color: "#00FF88", fontSize: 14, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' },
+  scanButtonContainer: { position: "absolute", alignSelf: "center" },
+  dossierContainer: { position: "absolute", left: 16, right: 16, borderRadius: 16, overflow: "hidden" },
+  dossierBlur: { padding: 0 },
+  dossierContent: { padding: 16, gap: 16 },
+  dossierHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  dossierAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: "#333" },
+  dossierName: { fontSize: 18, color: "white", fontWeight: "bold" },
+  dossierStatusText: { fontSize: 12, color: "rgba(255,255,255,0.7)" },
+  metricsRow: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  metricItem: { alignItems: "center" },
+  metricLabel: { fontSize: 10, color: "rgba(255,255,255,0.5)" },
+  metricValue: { fontSize: 16, color: "white", fontWeight: "bold" },
+  metricDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.1)" },
+  handshakeBtn: { backgroundColor: "#00FF88", padding: 14, borderRadius: 8, alignItems: "center" },
+  handshakeBtnText: { color: "#000", fontWeight: "bold", fontSize: 14 }
 });

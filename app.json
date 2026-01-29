@@ -58,14 +58,18 @@
         }
       ],
       [
-        "expo-camera",
+        "react-native-vision-camera",
         {
-          "cameraPermission": "Bumpr needs camera access to create AR Moments."
+          "cameraPermissionText": "Bumpr needs camera access to scan for faces.",
+          "enableCodeScanner": true
         }
       ]
     ],
-    "experiments": {
-      "reactCompiler": true
+    "reactCompiler": true
+  },
+  "extra": {
+    "eas": {
+      "projectId": "your-project-id"
     }
   }
 }
