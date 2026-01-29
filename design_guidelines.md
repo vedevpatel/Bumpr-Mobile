@@ -57,25 +57,41 @@ Auth required (Apple Sign-In primary, Google Sign-In secondary).
 
 ## 4. Color Palette
 
-**Functional Palette** (respecting user's specified direction):
-- Primary: `#5B7C99` (muted slate blue—calm, trustworthy)
-- Secondary: `#7A9D54` (muted sage green—"open" status)
-- Background: `#FAFBFC` (off-white, reduces eye strain)
-- Surface: `#FFFFFF`
-- Text Primary: `#1A2332`
-- Text Secondary: `#6B7684`
+**Aesthetic Direction:** Warm, minimal, cream-based design inspired by modern dating/social apps. Soft linen textures, muted earth tones, and generous whitespace create an inviting, premium feel.
+
+### Light Mode (Primary)
+- Primary: `#C4846C` (warm terracotta/rust—for accents and CTAs)
+- Secondary: `#8FA67A` (soft sage green—"open" status, success)
+- Accent: `#D4A574` (warm gold—highlights, badges)
+- Background Root: `#F5EDE4` (warm cream/linen)
+- Background Default: `#FAF7F3` (lighter cream for cards)
+- Background Secondary: `#EFE8DF` (subtle depth layers)
+- Text Primary: `#2C2825` (warm dark brown, not pure black)
+- Text Secondary: `#7A756F` (muted stone)
+- Border: `#E5DED5` (subtle warm dividers)
+
+### Dark Mode (Contrast)
+- Primary: `#D4A08A` (lightened terracotta)
+- Secondary: `#9FB88A` (brighter sage)
+- Accent: `#DEB68A` (warm gold)
+- Background Root: `#1C1A18` (warm charcoal)
+- Background Default: `#252320` (elevated dark cream)
+- Background Secondary: `#2F2C28` (layered depth)
+- Text Primary: `#F5F2EF` (warm off-white)
+- Text Secondary: `#A8A29D` (muted stone)
+- Border: `#3D3935` (subtle warm dividers)
 
 **Status Colors:**
-- Open: `#7A9D54` (green)
-- Busy: `#8E93A1` (gray)
-- AR Overlay: `#5B7C99` (blue, semi-transparent)
+- Open: Sage green (`#8FA67A` light / `#9FB88A` dark)
+- Busy: Stone gray (`#9A958E` light / `#6E6A65` dark)
+- AR Overlay: Terracotta, semi-transparent
 
 **Semantic:**
-- Success: `#7A9D54`
-- Warning: `#E8A758`
-- Error: `#D85D5D`
+- Success: Sage green
+- Warning: Warm gold
+- Error: Soft coral (`#C97B7B` light / `#D4908A` dark)
 
-Gradients: Soft, vertical fades (e.g., background to surface on cards). Shadows: Subtle, `shadowOpacity: 0.08`, `shadowRadius: 4`.
+Gradients: Soft vertical fades from background to surface. Shadows: Very subtle, `shadowOpacity: 0.06`, warm-tinted (`rgba(44, 40, 37, 0.06)`).
 
 ## 5. Typography
 
