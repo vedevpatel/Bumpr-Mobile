@@ -122,7 +122,7 @@ export default function MapScreen({ navigation }: MapScreenProps) {
   if (!permission.granted) {
     return (
       <ThemedView style={styles.container}>
-        <View style={styles.permissionCentered}>
+        <View style={[styles.permissionCentered, { paddingBottom: tabBarHeight + Spacing["4xl"] }]}>
           <EmptyState
             image={require("../../assets/images/onboarding-context.png")}
             title="Enable Location"
