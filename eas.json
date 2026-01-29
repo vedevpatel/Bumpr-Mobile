@@ -17,18 +17,18 @@
             "developmentClient": true,
             "distribution": "internal",
             "env": {
-                "EXPO_PUBLIC_API_URL": "PUT_YOUR_COMPUTER_IP_HERE:5000"
+                "EXPO_PUBLIC_API_URL": "https://bumpr-mobile.onrender.com"
             }
         },
         "preview": {
             "distribution": "internal",
             "env": {
-                "EXPO_PUBLIC_API_URL": "https://bumpr-api.onrender.com"
+                "EXPO_PUBLIC_API_URL": "https://bumpr-mobile.onrender.com"
             }
         },
         "production": {
             "env": {
-                "EXPO_PUBLIC_API_URL": "https://bumpr-api.onrender.com"
+                "EXPO_PUBLIC_API_URL": "https://bumpr-mobile.onrender.com"
             }
         }
     },
